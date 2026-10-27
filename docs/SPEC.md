@@ -45,7 +45,7 @@ All folders come from `internal/xdg`, resolved once at start from the environmen
 | Applications | `$XDG_DATA_HOME/applications` |
 | Icons | `$XDG_DATA_HOME/icons/hicolor/scalable/apps` |
 | Firejail system config | `/etc/firejail` (firejail's `${CFG}`) |
-| Firejail user config | `$XDG_CONFIG_HOME/firejail` (default `~/.config/firejail`) |
+| Firejail user config | `$HOME/.config/firejail`, always: firejail ignores `$XDG_CONFIG_HOME` (`profile.c`) |
 
 Jailcat creates its folders with mode `0700` (data, homes) or `0755` (the rest) when they are missing. If the bin folder is not on `$PATH`, the Launcher tab says so.
 
@@ -237,7 +237,7 @@ All off by default.
 ### §8.1 Resolution
 - `include <name>`: `${HOME}` and `${CFG}` are expanded; an absolute path is used as is; a bare name is looked up in the firejail user config folder, then in `/etc/firejail`. A missing included file is skipped (firejail skips missing `.local` files). An include cycle is an error
 - The user's `.local` files (`code.local`, `globals.local`) are read like any include, so their lines count in the base values
-- Macros in paths (`${HOME}`, `${DOWNLOADS}`, `${DESKTOP}`, `${DOCUMENTS}`, `${MUSIC}`, `${PICTURES}`, `${VIDEOS}`, `${PATH}`, `${RUNUSER}`) are kept as written in profile text and expanded only to show paths in the form. `${DOWNLOADS}` and the other user folders come from `user-dirs.dirs`
+- Macros in paths (`${HOME}`, `${DOWNLOADS}`, `${DESKTOP}`, `${DOCUMENTS}`, `${MUSIC}`, `${PICTURES}`, `${VIDEOS}`, `${PATH}`, `${RUNUSER}`) are kept as written in profile text and expanded only to show paths in the form. `${DOWNLOADS}` and the other user folders resolve as firejail's `macros.c` does: the `XDG_<NAME>_DIR="$HOME/<dir>"` line of `$HOME/.config/user-dirs.dirs` (only values relative to `$HOME`, and only when the folder exists), else the first of firejail's fixed translations that exists in the home (`Downloads`, `Загрузки`, `Téléchargement`, …), else unresolved
 - Each line is first normalized as firejail does (`profile.c`, `line_remove_spaces` in `util.c`): everything from the first `#` is a comment, leading blanks are dropped, and every run of spaces and tabs becomes one space
 - `ignore <text>` adds `<text>` to the ignore list; every line read after it that starts with `<text>` followed by the end of the line or a space is skipped (`is_in_ignore_list`). The match is on the text as written, before macros are expanded: `ignore whitelist ${HOME}/x` does not match `whitelist /home/me/x`. So `ignore nosound` skips `nosound`, `ignore whitelist` skips every `whitelist` line, and `ignore whitelist ${HOME}/.config/Code` also skips `whitelist ${HOME}/.config/Code - OSS`. An `include` line can be ignored too (`ignore include disable-xdg.inc`)
 - Firejail accepts at most 32 `ignore` entries in one sandbox, counting the ones in every included file (`MAX_PROFILE_IGNORE`); one more stops firejail with an error
