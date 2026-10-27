@@ -6,6 +6,7 @@ import (
 
 	m "github.com/rm4n0s/glutter/material"
 	"github.com/rm4n0s/glutter/svg"
+	gui "github.com/rm4n0s/glutter/ui"
 
 	"github.com/rm4n0s/jailcat/assets"
 	"github.com/rm4n0s/jailcat/internal/apps"
@@ -26,11 +27,20 @@ const (
 	buildsFailedText = "Jailcat could not read your saved builds, so none is marked as built. Press Refresh to try again."
 	// emptyStateText is the right pane while no app is selected.
 	emptyStateText = "Choose an app to build its sandbox"
+	// openingText is the right pane while the editor of an app is being prepared.
+	openingText = "Opening…"
+	// openFailedText is what the user reads when the editor of an app could not be opened.
+	openFailedText = "Jailcat could not open this app. Choose it again to try once more."
+	// draftFailedText is what the user reads when the unsaved changes of the editor could
+	// not be kept.
+	draftFailedText = "Jailcat could not keep your unsaved changes."
 )
 
 // HomePage is the main window (SPEC §5): the app list on the left, the build editor
-// (an empty state until step 4.2) on the right, and a banner on top when firejail is
-// missing. It scans the apps, reads the builds and looks for firejail off the UI thread.
+// (or an empty state) on the right, and a banner on top when firejail is missing. It
+// scans the apps, reads the builds and looks for firejail off the UI thread. Selecting
+// another app keeps the unsaved changes of the editor as a draft (SPEC §5), and so does
+// closing the window.
 type HomePage struct {
 	m.StatefulWidget
 	backend Backend
@@ -48,9 +58,11 @@ func (w *HomePage) CreateState() m.State { return &homeState{} }
 type homeState struct {
 	m.StateOf[*HomePage]
 
-	// apps, builds and revision are what the last finished scan found.
+	// apps, builds, drafts and revision are what the last finished scan found: the number
+	// of built builds and of never-built ones (drafts) of each app.
 	apps     []apps.App
 	builds   map[string]int
+	drafts   map[string]int
 	revision int
 	// loading is true while a scan runs; scanErr and buildsErr are the messages for the
 	// user when the last scan or the read of the builds failed.
@@ -66,11 +78,73 @@ type homeState struct {
 	known    bool
 	// selected is the app the user picked, nil for none.
 	selected *apps.App
+	// editor is the editor of the selected app, nil while it is being opened.
+	editor *Editor
+	// opening is true while the editor is being prepared; openErr is the message for the
+	// user when it could not be.
+	opening bool
+	openErr string
+	// openGen numbers the openings, so the answer of one that was replaced is dropped.
+	openGen int
+	// notice is a message about keeping the unsaved changes.
+	notice string
+	// cancelOpen stops the reads of the opening that runs; lastSave is closed when the last
+	// draft being written is done, so a draft is in the database before the next opening
+	// looks for builds. Both are used on the UI thread only.
+	cancelOpen context.CancelFunc
+	lastSave   <-chan struct{}
+
+	// lifecycle gets the request to close the window. exiting is true while the draft is
+	// written before the window closes; closeAnyway says the next request closes it even if
+	// the draft could not be written.
+	binding     *m.WidgetsBinding
+	lifecycle   *m.AppLifecycleListener
+	exiting     bool
+	closeAnyway bool
 }
 
 func (s *homeState) InitState() {
+	s.binding = m.WidgetsBindingOf(s.Context())
+	s.lifecycle = m.NewAppLifecycleListener(s.binding, m.AppLifecycleListenerOpts{OnExitRequested: s.onExitRequested})
 	s.startScan()
 	s.startFirejail()
+}
+
+func (s *homeState) Dispose() { s.lifecycle.Dispose() }
+
+// onExitRequested is the close button of the window. Unsaved changes of the editor are
+// kept as a draft first, off the UI thread, so the request is answered with Cancel and
+// the app exits itself when the draft is written (SPEC §5). If the draft cannot be
+// written the window stays open with a message, and a second close request closes it.
+func (s *homeState) onExitRequested() gui.AppExitResponse {
+	if s.closeAnyway || s.editor == nil {
+		return gui.AppExitResponseExit
+	}
+	plan := s.editor.DraftPlan()
+	if plan.Action == DraftNothing {
+		return gui.AppExitResponseExit
+	}
+	if s.exiting {
+		return gui.AppExitResponseCancel
+	}
+	s.exiting = true
+	backend, logger := s.Widget().backend, s.Widget().logger
+	s.Go(func(ctx context.Context) {
+		err := plan.Run(context.WithoutCancel(ctx), backend)
+		if err != nil {
+			logger.Error("keeping the draft before closing failed", "err", err)
+		}
+		s.binding.Post(func() {
+			s.exiting = false
+			if err != nil {
+				s.closeAnyway = true
+				s.SetState(func() { s.notice = draftFailedText + " Close the window again to leave without them." })
+				return
+			}
+			s.binding.ExitApplication(gui.AppExitTypeRequired)
+		})
+	})
+	return gui.AppExitResponseCancel
 }
 
 // startScan begins a scan, replacing the one that runs. It runs on the UI thread.
@@ -124,7 +198,7 @@ func (s *homeState) startScan() {
 // setApps stores the result of a scan and keeps the selection if the app is still there.
 func (s *homeState) setApps(found []apps.App, builds []store.Build) {
 	s.apps = found
-	s.builds = BuildCounts(builds)
+	s.builds, s.drafts = BuildCounts(builds), DraftCounts(builds)
 	if s.selected == nil {
 		return
 	}
@@ -135,6 +209,11 @@ func (s *homeState) setApps(found []apps.App, builds []store.Build) {
 			s.selected = &found[i]
 			break
 		}
+	}
+	if s.selected == nil {
+		// The app is gone: so is its editor.
+		s.editor, s.opening, s.openErr = nil, false, ""
+		s.openGen++
 	}
 }
 
@@ -175,12 +254,13 @@ func (s *homeState) Build(bc m.BuildContext) m.Widget {
 
 	list := NewAppList(s.Widget().backend, s.apps, AppListOpts{
 		Builds:   s.builds,
+		Drafts:   s.drafts,
 		Revision: s.revision,
 		Loading:  s.loading,
 		Error:    errText,
 		Selected: selected,
 		OnSelect: func(app apps.App) {
-			s.SetState(func() { s.selected = &app })
+			s.SetState(func() { s.selectApp(app) })
 		},
 		OnRefresh: s.refresh,
 	})
@@ -201,11 +281,12 @@ func (s *homeState) Build(bc m.BuildContext) m.Widget {
 	})
 }
 
-// rightPane is the empty state, or the name and the program of the selected app until
-// the build editor replaces it (step 4.2).
+// rightPane is the empty state, the build editor of the selected app, or what stands
+// in for it while the editor opens.
 func (s *homeState) rightPane(bc m.BuildContext) m.Widget {
 	theme := m.ThemeOf(bc)
-	if s.selected == nil {
+	switch {
+	case s.selected == nil:
 		return m.NewCenter(m.NewColumn([]m.Widget{
 			svg.NewSvgPictureMemory(assets.Icon(), svg.SvgPictureOpts{
 				Width: m.Some(96.0), Height: m.Some(96.0), ExcludeFromSemantics: true,
@@ -215,13 +296,20 @@ func (s *homeState) rightPane(bc m.BuildContext) m.Widget {
 				Style: theme.TextTheme.TitleMedium.CopyWith(m.TextStyleCopy{Color: m.Some(theme.ColorScheme.OnSurfaceVariant())}),
 			}),
 		}, m.ColumnOpts{MainAxisSize: m.MainAxisSizeMin}))
+	case s.editor != nil:
+		editorPage := NewEditorPage(s.Widget().backend, s.Widget().logger, s.editor, EditorPageOpts{
+			Key:            m.NewValueKey(s.editor),
+			OnDiscardDraft: s.discardDraft,
+		})
+		if s.notice == "" {
+			return editorPage
+		}
+		return m.NewColumn([]m.Widget{notice(bc, s.notice), m.NewExpanded(editorPage)},
+			m.ColumnOpts{CrossAxisAlignment: m.CrossAxisAlignmentStretch})
+	case s.openErr != "":
+		return m.NewAlign(notice(bc, s.openErr), m.AlignOpts{Alignment: m.AlignmentTopCenter})
 	}
-	// TODO(step 4.2): the build editor replaces this.
-	return m.NewPadding(m.NewEdgeInsetsAll(24), m.NewColumn([]m.Widget{
-		m.NewText(s.selected.Name, m.TextOpts{Style: theme.TextTheme.HeadlineSmall}),
-		m.NewSizedBox(nil, m.SizedBoxOpts{Height: m.Some(8.0)}),
-		m.NewText(s.selected.Binary, m.TextOpts{Style: theme.TextTheme.BodyMedium}),
-	}, m.ColumnOpts{CrossAxisAlignment: m.CrossAxisAlignmentStart}))
+	return centeredText(bc, openingText)
 }
 
 // firejailBanner is the strip on top of the window when firejail is not installed.

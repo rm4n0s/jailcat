@@ -97,7 +97,7 @@ Discovery runs off the UI thread at start and again on "Refresh". It does not wa
 
 - Left: the app list with search and filters. A built app shows "built" and the number of builds
 - Selecting an app with no build opens a new build in the editor. Selecting a built app opens its build, or a chooser if it has several, with "New build"
-- Unsaved changes in the editor are kept in the database as a draft when another app is selected (§12); a draft is not installed until Build
+- Unsaved changes in the editor are kept in the database as a draft when another app is selected or the window closes (§12); a draft is not installed until Build. A new build with changes is stored (never built, not installed) so its draft has a row; a build that was never built shows a "draft" chip in the list instead of "built", and only built builds pass the **Built** filter
 
 ## §6 Build editor
 
@@ -130,7 +130,7 @@ Discovery runs off the UI thread at start and again on "Refresh". It does not wa
 - A new build starts on group 1 if it exists, else on **Default**, which is what firejail does with no `--profile`
 - **Import profile…** picks a `.profile` file with the file chooser and copies it into `profiles/imported/` (a name that exists gets a `-2`, `-3`… suffix). Its includes are not copied; they resolve the way firejail resolves them (§8.1)
 - The build stores the selected profile's path, not its content (§13.3)
-- Selecting another profile recomputes every base value (§8). If the build has overrides, Jailcat asks: **Keep my changes** (overrides stay; ones that now equal the base value are dropped) or **Start over** (all overrides are removed)
+- Selecting another profile recomputes every base value (§8). If the build has overrides, Jailcat asks: **Keep my changes** (overrides stay; ones that now equal the base value are dropped), **Start over** (all overrides are removed except the sandbox name and the icon seed; Extra rules stay) or **Cancel**
 
 ## §7 Settings
 

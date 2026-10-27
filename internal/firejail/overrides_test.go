@@ -606,3 +606,118 @@ func TestOverridesValidateLocked(t *testing.T) {
 		})
 	}
 }
+
+func TestFieldValue(t *testing.T) {
+	s := DefaultSettings()
+	s.Network = NetNone
+	s.DNS = []string{"1.1.1.1"}
+	nice := 5
+	s.Nice = &nice
+	tests := []struct {
+		field  Field
+		want   any
+		wantOK bool
+	}{
+		{FieldNetwork, NetNone, true},
+		{FieldSeccomp, true, true},
+		{FieldDNS, []string{"1.1.1.1"}, true},
+		{FieldNice, &nice, true},
+		{Field("nonsense"), nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(string(tt.field), func(t *testing.T) {
+			got, ok := tt.field.Value(s)
+			if ok != tt.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantOK)
+			}
+			if tt.field == FieldNice {
+				if p, isInt := got.(*int); !isInt || *p != 5 || p == &nice {
+					t.Errorf("Value = %v, want a copy of 5", got)
+				}
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Value = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+	// Every field has a value.
+	for _, f := range Fields() {
+		if _, ok := f.Value(s); !ok {
+			t.Errorf("%s has no value", f)
+		}
+	}
+}
+
+func TestOverridesWithUnknownFrom(t *testing.T) {
+	const stored = `{"version":1,"future":{"a":[1,2]},"fields":{"sound":false,"warp_drive":{"level":9}},"folders":[]}`
+	var old Overrides
+	if err := json.Unmarshal([]byte(stored), &old); err != nil {
+		t.Fatal(err)
+	}
+	base := DefaultSettings()
+	edited := base.Clone()
+	edited.Network = NetNone
+
+	tests := []struct {
+		name string
+		o    Overrides
+		old  Overrides
+		want string
+	}{
+		{"unknown field and key are copied", Diff(base, edited), old,
+			`{"fields":{"network":"none","warp_drive":{"level":9}},"folders":[],"future":{"a":[1,2]},"version":1}`},
+		{"nothing to copy", Diff(base, edited), Overrides{},
+			`{"fields":{"network":"none"},"folders":[],"version":1}`},
+		{"the zero value", Overrides{}, old,
+			`{"fields":{"warp_drive":{"level":9}},"folders":[],"future":{"a":[1,2]},"version":1}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.o.WithUnknownFrom(tt.old)
+			data, err := json.Marshal(got)
+			if err != nil || string(data) != tt.want {
+				t.Errorf("got %s, %v; want %s", data, err, tt.want)
+			}
+			// The known part is unchanged.
+			if !slices.Equal(got.ChangedFields(), tt.o.ChangedFields()) {
+				t.Errorf("ChangedFields = %v, want %v", got.ChangedFields(), tt.o.ChangedFields())
+			}
+		})
+	}
+
+	t.Run("what o holds wins", func(t *testing.T) {
+		var o Overrides
+		if err := json.Unmarshal([]byte(`{"version":1,"future":1,"fields":{"warp_drive":2},"folders":[]}`), &o); err != nil {
+			t.Fatal(err)
+		}
+		data, _ := json.Marshal(o.WithUnknownFrom(old))
+		if want := `{"fields":{"warp_drive":2},"folders":[],"future":1,"version":1}`; string(data) != want {
+			t.Errorf("got %s, want %s", data, want)
+		}
+	})
+
+	t.Run("a known value of o beats an unknown of old", func(t *testing.T) {
+		var older Overrides
+		if err := json.Unmarshal([]byte(`{"version":1,"fields":{"network":"weird"},"folders":[]}`), &older); err == nil {
+			// network is known to this version and "weird" decodes as a string: it is a value,
+			// not an unknown field, so it must not be copied over o's.
+			data, _ := json.Marshal(Diff(base, edited).WithUnknownFrom(older))
+			if want := `{"fields":{"network":"none"},"folders":[],"version":1}`; string(data) != want {
+				t.Errorf("got %s, want %s", data, want)
+			}
+		}
+	})
+
+	t.Run("the receiver and old are not changed", func(t *testing.T) {
+		o := Diff(base, edited)
+		before, _ := json.Marshal(o)
+		oldBefore, _ := json.Marshal(old)
+		_ = o.WithUnknownFrom(old)
+		after, _ := json.Marshal(o)
+		oldAfter, _ := json.Marshal(old)
+		if string(before) != string(after) || string(oldBefore) != string(oldAfter) {
+			t.Error("WithUnknownFrom changed its input")
+		}
+	})
+}

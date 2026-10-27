@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"image/png"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -72,6 +73,28 @@ type fakeBackend struct {
 	gate chan struct{}
 	// scans counts the calls of ScanApps.
 	scans int
+
+	// fj answers ProfileChoices, ReadBase and ImportProfile from the fixture folders of
+	// firejail (the real code of [LocalBackend], no database).
+	fj *LocalBackend
+	// choices, when not nil, replaces the answer of ProfileChoices.
+	choices *ProfileChoices
+	// readGate, when not nil, holds ReadBase until it is closed.
+	readGate chan struct{}
+	// readErr maps a profile path to the error ReadBase returns for it.
+	readErr map[string]error
+	// reads lists the paths ReadBase was asked for.
+	reads []string
+	// imported lists the sources ImportProfile was asked for; importErr is its error.
+	imported  []string
+	importErr error
+	// createErr and saveErr are the errors of CreateBuild and SaveDraft.
+	createErr error
+	saveErr   error
+	// saves lists the calls that kept a draft or created a build, in order, as text.
+	saves []string
+	// lookups counts the calls of BuildsForApp.
+	lookups int
 }
 
 // set changes the fields under the lock.
@@ -161,6 +184,10 @@ func fixtureBackend(t *testing.T) *fakeBackend {
 	terminal := desktop("Terminal", "Terminal Emulator", "red")
 	terminal.UsesFirejail = true
 
+	// Visual Studio Code runs "code", which has a profile in the fixture of firejail.
+	code := desktop("Visual Studio Code", "Text Editor", "blue")
+	code.Binary, code.BinaryName, code.Comment = "/usr/bin/code", "code", "Code Editing. Redefined."
+
 	all := []apps.App{
 		desktop("Archive Manager", "Archiver", "green"),
 		calculator,
@@ -175,16 +202,19 @@ func fixtureBackend(t *testing.T) *fakeBackend {
 		hidden,
 		slack,
 		terminal,
-		desktop("Visual Studio Code", "Text Editor", "blue"),
+		code,
 		binary("wget"),
 		brokenIcon,
 	}
+	built := time.Date(2026, 10, 20, 9, 30, 0, 0, time.UTC)
+	fj := newFixtureFirejail(t)
 	return &fakeBackend{
+		fj:     NewLocalBackend(fj.dirs, nil, "", slog.New(slog.NewTextHandler(io.Discard, nil))),
 		result: apps.Result{Apps: all},
 		builds: []store.Build{
-			{ID: 1, SandboxName: "firejail-firefox", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop"},
-			{ID: 2, SandboxName: "firejail-firefox-2", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop"},
-			{ID: 3, SandboxName: "firejail-code", AppKind: store.AppKindDesktop, DesktopFileID: "Visual Studio Code.desktop"},
+			{ID: 1, SandboxName: "firejail-firefox", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop", BuiltAt: &built},
+			{ID: 2, SandboxName: "firejail-firefox-2", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop", BuiltAt: &built},
+			{ID: 3, SandboxName: "firejail-code", AppKind: store.AppKindDesktop, DesktopFileID: "Visual Studio Code.desktop", BuiltAt: &built},
 		},
 		firejail: FirejailInfo{Path: "/usr/bin/firejail", Version: "0.9.80"},
 		icons: map[string]icons.Icon{
@@ -249,6 +279,13 @@ func (p *page) waitFor(what string, cond func() bool) {
 func (p *page) ready() {
 	p.t.Helper()
 	p.waitFor("the scan and firejail", func() bool { h := p.home(); return !h.loading && h.known })
+}
+
+// editorReady waits until the editor of the selected app is on screen.
+func (p *page) editorReady() *Editor {
+	p.t.Helper()
+	p.waitFor("the editor", func() bool { return p.home().editor != nil })
+	return p.home().editor
 }
 
 // names are the names of the apps the list shows after the search and the filter.

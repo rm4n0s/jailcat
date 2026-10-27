@@ -320,3 +320,15 @@ func (f Field) Equal(a, b Settings) bool {
 	row, ok := findRow(f)
 	return ok && row.equal(&a, &b)
 }
+
+// Value returns the value of the field in s, as a copy: a slice or a pointer in it
+// shares nothing with s. The type is the type of the Settings field (a bool, a string
+// kind such as [HomeMode], an int64, a []string, ...). The editor shows it next to the
+// field's name. The second result is false for a name that is not a field.
+func (f Field) Value(s Settings) (any, bool) {
+	row, ok := findRow(f)
+	if !ok {
+		return nil, false
+	}
+	return row.get(&s), true
+}

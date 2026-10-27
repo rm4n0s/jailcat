@@ -14,8 +14,12 @@ type AppRowOpts struct {
 	Key m.Key
 	// Selected highlights the row.
 	Selected bool
-	// Builds is the number of builds of the app; above zero the row shows a "built" chip.
+	// Builds is the number of builds of the app that were built; above zero the row shows
+	// a "built" chip.
 	Builds int
+	// Drafts is the number of builds of the app that were never built. An app with no
+	// built build and a draft shows a "draft" chip.
+	Drafts int
 	// OnTap is called when the row is tapped. It is not called for an app that is
 	// already sandboxed.
 	OnTap func()
@@ -50,8 +54,11 @@ func (w *AppRow) Build(bc m.BuildContext) m.Widget {
 	app := w.app
 
 	var badges []m.Widget
-	if w.o.Builds > 0 {
+	switch {
+	case w.o.Builds > 0:
 		badges = append(badges, badge(bc, builtLabel(w.o.Builds), scheme.Primary(), scheme.OnPrimary()))
+	case w.o.Drafts > 0:
+		badges = append(badges, badge(bc, draftLabel, scheme.SecondaryContainer(), scheme.OnSecondaryContainer()))
 	}
 	if app.UsesFirejail {
 		badges = append(badges, badge(bc, "uses firejail", scheme.TertiaryContainer(), scheme.OnTertiaryContainer()))
@@ -89,6 +96,9 @@ func (w *AppRow) Build(bc m.BuildContext) m.Widget {
 		ContentPadding:    m.NewEdgeInsetsSymmetric(0, 12),
 	})
 }
+
+// draftLabel is the text of the chip of an app that has only builds that were never built.
+const draftLabel = "draft"
 
 // secondLine is the small text under an app's name: why it cannot be built, the path of a
 // binary, or the generic name or comment of a menu app.

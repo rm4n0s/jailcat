@@ -163,6 +163,37 @@ func (o Overrides) WithoutFolder(path string) Overrides {
 	return out
 }
 
+// WithUnknownFrom returns o with the field values and the top-level keys that old holds
+// but this version does not know (see [Overrides]) added, so a database written by a
+// newer Jailcat loses nothing when an older one recomputes the overrides with [Diff].
+// What o has itself wins: a name o already holds is not replaced. Neither o nor old is
+// changed.
+func (o Overrides) WithUnknownFrom(old Overrides) Overrides {
+	out := o.clone()
+	for name, raw := range old.unknown {
+		if _, ok := out.values[name]; ok {
+			continue
+		}
+		if _, ok := out.unknown[name]; ok {
+			continue
+		}
+		if out.unknown == nil {
+			out.unknown = map[Field]json.RawMessage{}
+		}
+		out.unknown[name] = raw
+	}
+	for key, raw := range old.extra {
+		if _, ok := out.extra[key]; ok {
+			continue
+		}
+		if out.extra == nil {
+			out.extra = map[string]json.RawMessage{}
+		}
+		out.extra[key] = raw
+	}
+	return out
+}
+
 // clone copies the maps and the folder list, so the copy can be changed.
 func (o Overrides) clone() Overrides {
 	out := o

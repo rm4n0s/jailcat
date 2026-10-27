@@ -18,9 +18,12 @@ const rowExtent = 72.0
 type AppListOpts struct {
 	// Key is the key of the widget.
 	Key m.Key
-	// Builds counts the builds of each app by [AppKey]; an app with a count above zero
-	// shows a "built" chip and passes the Built filter.
+	// Builds counts the builds of each app by [AppKey] that were built ([BuildCounts]); an
+	// app with a count above zero shows a "built" chip and passes the Built filter.
 	Builds map[string]int
+	// Drafts counts the builds that were never built ([DraftCounts]); an app that has
+	// only those shows a "draft" chip.
+	Drafts map[string]int
 	// Revision changes whenever Apps or Builds do, so the list knows to filter again.
 	Revision int
 	// Loading shows a progress indicator: the apps are being scanned.
@@ -195,6 +198,7 @@ func (s *appListState) body(bc m.BuildContext) m.Widget {
 				Key:      m.NewValueKey(key),
 				Selected: key == w.o.Selected,
 				Builds:   w.o.Builds[key],
+				Drafts:   w.o.Drafts[key],
 				OnTap: func() {
 					if w.o.OnSelect != nil {
 						w.o.OnSelect(app)

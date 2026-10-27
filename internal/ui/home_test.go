@@ -173,12 +173,13 @@ func TestSelectingARow(t *testing.T) {
 	if p.ts.Exists(gluttertest.ByText(emptyStateText)) {
 		t.Error("the empty state is still shown")
 	}
-	// Its name in the pane, and its program (this step's stand-in for the editor).
+	p.editorReady()
+	// Its name in the editor, next to the list's row; the sandbox name after the arrow.
 	if n := p.ts.Count(gluttertest.ByText("Calculator")); n != 2 {
-		t.Errorf("\"Calculator\" is shown %d times, want 2 (row and pane)", n)
+		t.Errorf("\"Calculator\" is shown %d times, want 2 (row and editor)", n)
 	}
-	if n := p.ts.Count(gluttertest.ByText("/usr/bin/Calculator")); n != 1 {
-		t.Errorf("the program is shown %d times, want 1", n)
+	if n := p.ts.Count(gluttertest.ByText("firejail-calculator")); n != 1 {
+		t.Errorf("the sandbox name is shown %d times, want 1", n)
 	}
 	var selectedRows int
 	for _, w := range p.ts.Widgets(gluttertest.ByType[*AppRow]()) {
@@ -193,8 +194,8 @@ func TestSelectingARow(t *testing.T) {
 		t.Errorf("%d rows are highlighted, want 1", selectedRows)
 	}
 
-	// Another tap moves the selection.
-	p.ts.Tap(gluttertest.ByText("Files"))
+	// Another tap moves the selection ("Files" is also the name of a tab: tap the row).
+	p.ts.Tap(gluttertest.Descendant(gluttertest.ByType[*AppList](), gluttertest.ByText("Files")))
 	p.ts.Pump()
 	if sel := p.home().selected; sel == nil || sel.Name != "Files" {
 		t.Errorf("selected = %+v after the second tap", sel)
@@ -458,8 +459,9 @@ func TestGoldenHomeSelectedWithBanner(t *testing.T) {
 	backend.firejail = FirejailInfo{Missing: true}
 	p := newPage(t, backend)
 	p.ready()
-	p.ts.Tap(gluttertest.ByText("Firefox"))
+	p.ts.Tap(gluttertest.ByText("Calculator"))
 	p.ts.Pump()
+	p.editorReady()
 	p.golden("home-selected-banner", "")
 }
 

@@ -201,3 +201,19 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   The real app on a scratch home under a headless compositor (dark theme): the system's apps with their real icons and calibre greyed as an already-sandboxed Flatpak; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** with no search text, **All** lists menu apps before binaries (SPEC §4.3 updated). Proof method B uses the XDG variables instead of a dev-home variable. `AppID` lives in `internal/install`. The `-setup-desktop` entry has no Jailcat header and is not a build.
+
+## 4.2 Build editor shell and profile selector
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.2-editor-shell
+- **Summary:** Selecting an app opens the build editor of SPEC §6: the header (icon, app → sandbox name), the profile selector (a searchable, grouped dialog with Import), the nine tabs with change dots, "changed" marks with Reset to profile, validation problems, and the disabled button bar. An `Editor` model (no widgets) holds base, overrides and Extra rules; switching profile asks Keep my changes / Start over / Cancel. Apps with several builds open a chooser; unsaved changes become drafts when another app is selected or the window closes (Glutter's `OnExitRequested`), and come back with an "Unsaved draft" note and Discard draft. Overrides a newer Jailcat stored survive edits, drafts and profile switches.
+- **Main files:** `internal/ui/editor.go`, `editorpage.go`, `tabs.go`, `changedmark.go`, `profiledialog.go`, `dialogs.go`, `profiles.go`, `newbuild.go`, `openeditor.go`, `home_open.go`, `localbackend_editor.go`, their tests; `internal/firejail/fields.go` (`Field.Value`), `overrides.go` (`WithUnknownFrom`).
+- **Tests:** `Editor` table tests (set/reset, change dots, profile switches over the VS Code and default fixtures, drafts, unknown keys kept); `LocalBackend` profile choices, base reading, import naming, new-build defaults; widget tests for the editor, the profile dialog, Keep/Start over, the build chooser, drafts on switching apps and on closing the window, Discard draft, import through the fake file chooser; route tests for the 8 tags; goldens `editor`, `editor-files`, `profile-selector`.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![4.2 the editor](implemented-proof-images/4.2-editor.png)
+  A new VS Code build on "code (firejail)": header, profile button, nine tabs with dots on Files and Network, Network none marked changed with Reset to profile, Preview/Try/Build disabled; viewed by the manager.
+  ![4.2 the profile selector](implemented-proof-images/4.2-profile-selector.png)
+  The "Choose a profile" dialog with search, For this app (code, highlighted), None, Default and the firejail profiles, Import profile… and Cancel; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** a new build's launcher defaults (menu name, comment, terminal) are stored as overrides but don't count as changes; the sandbox name and icon seed never do. "Start over" keeps the sandbox name, icon seed and Extra rules (SPEC §6.1 updated). Never-built builds show "draft" (SPEC §5 updated). `Problems()` doesn't yet include Extra-rules diagnostics (step 4.6).

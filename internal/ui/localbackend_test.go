@@ -76,6 +76,12 @@ func newSystem(t *testing.T, withFirejail bool) system {
 // newBackend returns the backend of the system with a database in a temporary folder.
 func (s system) newBackend(t *testing.T) (*LocalBackend, *store.Store) {
 	t.Helper()
+	return s.newBackendWith(t, s.dirs)
+}
+
+// newBackendWith is newBackend with other folders than the system's own.
+func (s system) newBackendWith(t *testing.T, dirs xdg.Dirs) (*LocalBackend, *store.Store) {
+	t.Helper()
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "jailcat.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +91,7 @@ func (s system) newBackend(t *testing.T) (*LocalBackend, *store.Store) {
 			t.Errorf("Close: %v", err)
 		}
 	})
-	return NewLocalBackend(s.dirs, st, apps.LocaleFromEnv(s.env), slog.New(slog.NewTextHandler(io.Discard, nil))), st
+	return NewLocalBackend(dirs, st, apps.LocaleFromEnv(s.env), slog.New(slog.NewTextHandler(io.Discard, nil))), st
 }
 
 func TestLocalBackendScanApps(t *testing.T) {
@@ -192,9 +198,10 @@ func TestLocalBackendListBuilds(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counts := BuildCounts(got)
-	if len(got) != 2 || counts["desktop:code.desktop"] != 1 || counts["binary:/bin/mytool"] != 1 {
-		t.Errorf("builds = %+v, counts = %v", got, counts)
+	// Nothing was built: both are drafts.
+	drafts, built := DraftCounts(got), BuildCounts(got)
+	if len(got) != 2 || drafts["desktop:code.desktop"] != 1 || drafts["binary:/bin/mytool"] != 1 || len(built) != 0 {
+		t.Errorf("builds = %+v, drafts = %v, built = %v", got, drafts, built)
 	}
 }
 
