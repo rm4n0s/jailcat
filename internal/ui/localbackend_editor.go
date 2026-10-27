@@ -30,6 +30,9 @@ const maxImportCopies = 1000
 // HomeDir returns the user's home folder.
 func (b *LocalBackend) HomeDir() string { return b.dirs.Home }
 
+// HomesDir returns the folder of Jailcat's private homes.
+func (b *LocalBackend) HomesDir() string { return b.dirs.Homes }
+
 // ProfileChoices lists the profiles of SPEC §6.1 for the app. A folder that does not
 // exist is an empty group.
 func (b *LocalBackend) ProfileChoices(ctx context.Context, app apps.App) (ProfileChoices, error) {

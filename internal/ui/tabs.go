@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strconv"
 	"strings"
@@ -112,25 +113,15 @@ func formatValue(v any) string {
 	return fmt.Sprint(v)
 }
 
-// accessText is how a folder row's access level is written.
-func accessText(a firejail.Access) string {
-	switch a {
-	case firejail.AccessReadWrite:
-		return "read-write"
-	case firejail.AccessReadOnly:
-		return "read-only"
-	case firejail.AccessHidden:
-		return "hidden"
-	}
-	return string(a)
-}
-
 // tabActions are what the body of a tab can ask the page to do.
 type tabActions struct {
 	// reset puts a setting back to its base value.
 	reset func(f firejail.Field)
-	// resetFolder puts a folder row back to the base's.
-	resetFolder func(path string)
+	// change runs a function that changes the editor inside the page's SetState, from any
+	// goroutine.
+	change func(apply func())
+	// logger gets what the user must not read.
+	logger *slog.Logger
 }
 
 // settingsOfTab returns the fields shown in a tab, in the order of the table.
@@ -147,6 +138,9 @@ func settingsOfTab(tab firejail.Tab) []firejail.Field {
 // tabBody is the body of a tab: the list of its settings and their current values,
 // with a [ChangedMark] next to each one that differs from the base profile.
 func tabBody(bc m.BuildContext, e *Editor, tab firejail.Tab, act tabActions) m.Widget {
+	if tab == firejail.TabFiles {
+		return NewFilesTab(e, act.logger, act.change)
+	}
 	var rows []m.Widget
 	if tab == TabExtraRules {
 		rows = extraRulesRows(bc, e)
@@ -160,9 +154,6 @@ func tabBody(bc m.BuildContext, e *Editor, tab firejail.Tab, act tabActions) m.W
 				mark = NewChangedMark(func() { act.reset(f) })
 			}
 			rows = append(rows, settingRow(bc, settingLabel(f), formatValue(v), mark, m.NewValueKey("setting:"+string(f))))
-		}
-		if tab == firejail.TabFiles {
-			rows = append(rows, folderRows(bc, e, final, act)...)
 		}
 	}
 	return m.NewListView(rows, m.ListViewOpts{Key: m.NewValueKey("body:" + string(tab)), Padding: m.NewEdgeInsetsSymmetric(8, 16)})
@@ -181,37 +172,6 @@ func settingRow(bc m.BuildContext, label, value string, mark m.Widget, key m.Key
 	}
 	return m.NewSizedBox(m.NewRow(children, m.RowOpts{CrossAxisAlignment: m.CrossAxisAlignmentCenter}),
 		m.SizedBoxOpts{Key: key, Height: m.Some(36.0)})
-}
-
-// folderRows are the lines of the folder list on the Files tab: the rows of the list,
-// and the rows of the base profile the user removed.
-func folderRows(bc m.BuildContext, e *Editor, final firejail.Settings, act tabActions) []m.Widget {
-	var rows []m.Widget
-	theme := m.ThemeOf(bc)
-	rows = append(rows, m.NewPadding(m.NewEdgeInsetsFromLTRB(0, 12, 0, 4), m.NewText("Folders", m.TextOpts{Style: theme.TextTheme.TitleSmall})))
-	if len(final.Folders) == 0 {
-		rows = append(rows, settingRow(bc, "No folders", "", nil, m.NewValueKey("folder:none")))
-	}
-	for _, f := range final.Folders {
-		path := f.Path
-		value := accessText(f.Access)
-		if f.FromProfile {
-			value += " (from profile)"
-		}
-		var mark m.Widget
-		if e.FolderChanged(path) {
-			mark = NewChangedMark(func() { act.resetFolder(path) })
-		}
-		rows = append(rows, settingRow(bc, path, value, mark, m.NewValueKey("folder:"+path)))
-	}
-	for _, fo := range e.ChangedFolders() {
-		if !fo.Removed {
-			continue
-		}
-		path := fo.Path
-		rows = append(rows, settingRow(bc, path, "removed", NewChangedMark(func() { act.resetFolder(path) }), m.NewValueKey("folder:"+path)))
-	}
-	return rows
 }
 
 // extraRulesRows are the lines of the Extra rules tab: the rows the user wrote.

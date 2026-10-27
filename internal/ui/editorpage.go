@@ -33,8 +33,8 @@ type EditorPageOpts struct {
 
 // EditorPage is the build editor of SPEC §6: the header, the profile selector, the row
 // of tabs with a dot on the ones that have changes, the body of the tab, the problems
-// and the buttons. It shows and changes an [Editor]; the bodies of the tabs list the
-// settings with their values for now.
+// and the buttons. It shows and changes an [Editor]. The Files tab is a [FilesTab]; the other
+// bodies list the settings with their values for now.
 type EditorPage struct {
 	m.StatefulWidget
 	backend Backend
@@ -184,8 +184,9 @@ func (s *editorPageState) Build(bc m.BuildContext) m.Widget {
 	}), m.DefaultTabControllerOpts{InitialIndex: index, AnimationDuration: m.Some(time.Duration(0))})
 
 	act := tabActions{
-		reset:       func(f firejail.Field) { s.SetState(func() { e.Reset(f) }) },
-		resetFolder: func(path string) { s.SetState(func() { e.ResetFolder(path) }) },
+		reset:  func(f firejail.Field) { s.SetState(func() { e.Reset(f) }) },
+		change: func(apply func()) { s.SetState(apply) },
+		logger: w.logger,
 	}
 
 	children := []m.Widget{

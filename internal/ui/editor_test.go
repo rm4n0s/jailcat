@@ -33,6 +33,7 @@ func newFixtureFirejail(t *testing.T) fixtureFirejail {
 	dirs := xdg.Dirs{
 		Home: filepath.Join(root, "home"), FirejailSystem: sys, FirejailUser: filepath.Join(root, "user"),
 		Imported: filepath.Join(root, "imported"),
+		Homes:    filepath.Join(root, "home", ".local", "share", "jailcat", "homes"),
 	}
 	cfg, err := firejail.ReadConfig(context.Background(), filepath.Join(sys, "firejail.config"))
 	if err != nil {

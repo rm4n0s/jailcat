@@ -14,6 +14,8 @@ import (
 
 func (f *fakeBackend) HomeDir() string { return f.fj.dirs.Home }
 
+func (f *fakeBackend) HomesDir() string { return f.fj.dirs.Homes }
+
 func (f *fakeBackend) ProfileChoices(ctx context.Context, app apps.App) (ProfileChoices, error) {
 	f.mu.Lock()
 	override := f.choices

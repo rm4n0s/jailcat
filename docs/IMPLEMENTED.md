@@ -217,3 +217,17 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   The "Choose a profile" dialog with search, For this app (code, highlighted), None, Default and the firejail profiles, Import profile… and Cancel; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** a new build's launcher defaults (menu name, comment, terminal) are stored as overrides but don't count as changes; the sandbox name and icon seed never do. "Start over" keeps the sandbox name, icon seed and Extra rules (SPEC §6.1 updated). Never-built builds show "draft" (SPEC §5 updated). `Problems()` doesn't yet include Extra-rules diagnostics (step 4.6).
+
+## 4.3 Files tab
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.3-files-tab
+- **Summary:** The Files tab of SPEC §7.1: the four home choices at the top (Own private home shows its folder), the folder list (Add folder… through the desktop's folder chooser, Type a path…, access per row, remove and restore, "from profile" and locked rows, per-row Reset), the real-home refusal in Empty and Own private home, and the six quick switches. All edits go through the `Editor`, so dots, marks and drafts work.
+- **Main files:** `internal/ui/filestab.go`, `pathdialog.go`, `editor_files.go`, their tests; `editor.go`, `tabs.go`, `editorpage.go`, `backend.go` (`HomesDir`).
+- **Tests:** `Editor` folder operations (spellings, checks, refusals, locked rows); widget tests for every home choice, the chooser (two folders, duplicate, cancel, failure), the typed path, access, remove/restore, locked rows, every switch, Downloads disabled in private modes, scrolling; golden `files-tab`.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![4.3 Files tab](implemented-proof-images/4.3-files-tab.png)
+  VS Code on "code (firejail)" with Own private home chosen (its folder shown), an added `/mnt/projects`, `~/.config/Code` changed to read-only and the other profile rows; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** Own private home stores the absolute `<homes>/<sandbox name>`; renaming the sandbox in the Launcher tab must move it (step 4.6). The home folder itself can't be a row. The user's rows are listed before the profile's.

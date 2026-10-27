@@ -29,6 +29,8 @@ type Backend interface {
 	BinOnPath() bool
 	// HomeDir returns the user's home folder, to recognize folders inside it.
 	HomeDir() string
+	// HomesDir returns the folder of Jailcat's private homes (SPEC §3.1).
+	HomesDir() string
 
 	// ProfileChoices lists the profiles the selector offers for the app, group by group
 	// (SPEC §6.1).

@@ -22,7 +22,7 @@ func OpenEditor(ctx context.Context, backend Backend, logger *slog.Logger, app a
 	if err != nil {
 		return nil, err
 	}
-	opts := EditorOpts{Home: backend.HomeDir(), Choices: choices}
+	opts := EditorOpts{Home: backend.HomeDir(), HomesDir: backend.HomesDir(), Choices: choices}
 	if build == nil {
 		opts.BaseProfile = choices.Default.Path
 		if opts.Defaults, err = backend.NewBuildDefaults(ctx, app); err != nil {

@@ -50,6 +50,9 @@ type snapshot struct {
 type EditorOpts struct {
 	// Home is the user's home folder, to recognize folders inside it.
 	Home string
+	// HomesDir is the folder of Jailcat's private homes ([xdg.Dirs] Homes): an Own
+	// private home is a folder of it, named like the sandbox (SPEC §7.1).
+	HomesDir string
 	// Choices is the profile selector's content; it names the base profile on the button.
 	Choices ProfileChoices
 	// BaseProfile is the path of the base profile Base was computed from, or "" for None.
@@ -86,6 +89,8 @@ func BuildBaseProfile(b store.Build) string {
 type Editor struct {
 	app  apps.App
 	home string
+	// homesDir is the folder of the private homes.
+	homesDir string
 
 	// build is the stored build; its ID is 0 until the build is stored.
 	build   store.Build
@@ -115,7 +120,7 @@ type Editor struct {
 // NewEditor creates the editor of a new build, or of the stored build in o.Build.
 func NewEditor(app apps.App, o EditorOpts) *Editor {
 	e := &Editor{
-		app: app, home: o.Home, choices: o.Choices,
+		app: app, home: o.Home, homesDir: o.HomesDir, choices: o.Choices,
 		baseProfile: o.BaseProfile, profile: o.Profile, base: o.Base,
 	}
 	e.baseline = e.makeBaseline(o.Base)
