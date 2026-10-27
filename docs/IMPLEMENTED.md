@@ -49,3 +49,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** SPEC §3.1 corrected: firejail ignores `$XDG_CONFIG_HOME` (`profile.c` builds `$HOME/.config/firejail`), and §8.1 now says how firejail resolves the user-folder macros. `Dirs` also has `Launchers` (`<data>/launchers`, SPEC §9.3). An unreadable `user-dirs.dirs` is an error (`UserDirsReadFailed`) where firejail would ignore it.
+
+## 1.2 Desktop entries (`internal/desktopentry`)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-1.2-desktop-entries
+- **Summary:** `internal/desktopentry` reads and writes `.desktop` files by the Desktop Entry Specification: groups and keys in file order with comments kept, localized lookup in the spec's order, string and list escapes, booleans, actions in `Actions=` order, and desktop file IDs. `SplitExec`, `QuoteExecArg` and `JoinExec` handle the `Exec` key's quoting and field codes. Every one of the 210 real entries in `/usr/share/applications` parses and its `Exec` lines split (checked once by the manager, not a test).
+- **Main files:** `internal/desktopentry/entry.go`, `parse.go`, `write.go`, `value.go`, `exec.go`, `fileid.go`, their tests, and `testdata/` (VS Code, Firefox, quoted-Exec, comment and CRLF fixtures, 7 broken files, a golden built entry).
+- **Tests:** parsing of every fixture and error case; localized lookup order; lists and booleans; `Exec` round trips over every reserved character, `%`, newline, non-ASCII and the empty argument; byte-identical write round trips; route tests for all 18 tags. 100% statement coverage.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** `JoinExec` returns `(string, error)` (an unlisted field code is refused). A repeated key in a group is an error (`DuplicateKey`), as the spec says; a file that fails to parse is skipped by step 1.3. A newline in an `Exec` argument is written inside quotes and escaped as `\n`. Deprecated field codes are dropped on reading.

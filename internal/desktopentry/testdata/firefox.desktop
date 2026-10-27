@@ -1,0 +1,41 @@
+[Desktop Entry]
+Version=1.0
+Name=Firefox
+Name[de]=Firefox Webbrowser
+Name[fr]=Navigateur Web Firefox
+Name[pt]=Firefox
+Name[pt_BR]=Firefox (Brasil)
+Name[sr@latin]=Firefox latinica
+GenericName=Web Browser
+GenericName[de]=Webbrowser
+GenericName[fr]=Navigateur Web
+Comment=Browse the World Wide Web
+Comment[de]=Im Internet surfen
+Keywords=Internet;WWW;Browser;Web;Explorer;
+Keywords[de]=Internet;WWW;Browser;Web;Explorer;Webseite;
+Exec=firefox %u
+Icon=firefox
+Terminal=false
+X-MultipleArgs=false
+Type=Application
+MimeType=text/html;text/xml;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+Categories=Network;WebBrowser;
+StartupWMClass=firefox
+Actions=new-window;new-private-window;profile-manager-window;
+
+[Desktop Action new-window]
+Name=Open a New Window
+Name[de]=Neues Fenster öffnen
+Name[fr]=Ouvrir une nouvelle fenêtre
+Exec=firefox --new-window %u
+
+[Desktop Action new-private-window]
+Name=Open a New Private Window
+Name[de]=Neues privates Fenster öffnen
+Exec=firefox --private-window %u
+
+[Desktop Action profile-manager-window]
+Name=Open the Profile Manager
+Name[de]=Profilverwaltung öffnen
+Exec=firefox --ProfileManager

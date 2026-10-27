@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=My App
+Exec="/opt/My App/bin/app" --flag "a b" %F
+Icon=myapp
+Terminal=false
+Actions=geo;
+
+[Desktop Action geo]
+Name=Geo handler
+Exec=kde-geo-uri-handler --coordinate-template "https://example.org/?lat=<LAT>&lon=<LON>" --fallback "https://example.org" %u
