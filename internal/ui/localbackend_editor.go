@@ -13,6 +13,7 @@ import (
 
 	"github.com/rm4n0s/jailcat/internal/apps"
 	"github.com/rm4n0s/jailcat/internal/firejail"
+	"github.com/rm4n0s/jailcat/internal/install"
 	"github.com/rm4n0s/jailcat/internal/store"
 )
 
@@ -253,6 +254,28 @@ func (b *LocalBackend) NewBuildDefaults(ctx context.Context, app apps.App) (fire
 		taken[build.SandboxName] = true
 	}
 	return newBuildDefaults(app, taken), nil
+}
+
+// SandboxNameTaken reports whether a saved build other than exceptBuildID has the name.
+func (b *LocalBackend) SandboxNameTaken(ctx context.Context, name string, exceptBuildID int64) (bool, error) {
+	build, err := b.store.GetBuildByName(ctx, name)
+	if err != nil {
+		if appErr, ok := errors.FromError(err); ok && appErr.Tag == store.TagBuildNotFound {
+			return false, nil
+		}
+		return false, err
+	}
+	return build.ID != exceptBuildID, nil
+}
+
+// PreviewIcon makes the icon [install.Prepare] would write for the app and settings.
+func (b *LocalBackend) PreviewIcon(ctx context.Context, app apps.App, s firejail.Settings) ([]byte, string, error) {
+	return install.RenderIcon(ctx, b.dirs, b.iconTheme(ctx), app, s)
+}
+
+// CheckExtraRules checks the rows with the folders of firejail and Jailcat.
+func (b *LocalBackend) CheckExtraRules(_ context.Context, rows []string, base firejail.Base) []firejail.Problem {
+	return firejail.CheckExtraRules(rows, b.dirs, base)
 }
 
 const (

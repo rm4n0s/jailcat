@@ -61,6 +61,16 @@ type Backend interface {
 	// §7.8): a sandbox name no other build has, the menu name, the comment, the terminal
 	// choice and a random icon seed. The other fields are zero.
 	NewBuildDefaults(ctx context.Context, app apps.App) (firejail.Settings, error)
+	// SandboxNameTaken reports whether a saved build other than the one with the ID
+	// exceptBuildID (0 for a build that is not saved yet) has the sandbox name (SPEC §7.8).
+	SandboxNameTaken(ctx context.Context, name string, exceptBuildID int64) (bool, error)
+	// PreviewIcon makes the SVG icon a build of the app with the settings would install
+	// (SPEC §10), without writing it. fallbackReason says, in words, why a random icon was
+	// made when the settings ask for the app's icon with the badge and it cannot be used;
+	// it is "" otherwise.
+	PreviewIcon(ctx context.Context, app apps.App, s firejail.Settings) (svg []byte, fallbackReason string, err error)
+	// CheckExtraRules checks the rows of the Extra rules tab against the base (SPEC §7.9).
+	CheckExtraRules(ctx context.Context, rows []string, base firejail.Base) []firejail.Problem
 }
 
 // FirejailInfo says which firejail Jailcat found.

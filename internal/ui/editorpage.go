@@ -33,9 +33,9 @@ type EditorPageOpts struct {
 
 // EditorPage is the build editor of SPEC §6: the header, the profile selector, the row
 // of tabs with a dot on the ones that have changes, the body of the tab, the problems
-// and the buttons. It shows and changes an [Editor]. The Files, Network, Devices and
-// Desktop tabs are [FilesTab], [NetworkTab], [DevicesTab] and [DesktopTab]; the other
-// bodies list the settings with their values for now.
+// and the buttons. It shows and changes an [Editor]. The tabs are [FilesTab], [NetworkTab],
+// [DevicesTab], [DesktopTab], [SecurityTab], [ProgramsTab], [LimitsTab], [LauncherTab] and
+// [ExtraRulesTab].
 type EditorPage struct {
 	m.StatefulWidget
 	backend Backend

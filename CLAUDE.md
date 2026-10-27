@@ -52,7 +52,7 @@ Before reporting a task as finished, run `gofmt`, `go vet ./...`, `golangci-lint
 - Pass `context.Context` as the first parameter of anything that does I/O (the database, the file system, running `firejail`, file dialogs). Name it `ctx`. Name a Glutter `BuildContext` `bc`
 - Tests are table-driven
 - No global mutable state: no package-level database handle, logger, folder paths or caches. `main` builds them and passes them down through constructors. Package-level read-only values are fine and are never reassigned
-- Prefer the standard library. Allowed dependencies: `github.com/rm4n0s/glutter` (with its `svg` package), `github.com/rm4n0s/errors`, `gorm.io/gorm` and `gorm.io/driver/sqlite` (GORM's SQLite driver), with what they pull in. Ask before adding any other
+- Prefer the standard library. Allowed dependencies: `github.com/rm4n0s/glutter` (with its `svg` package), `github.com/rm4n0s/errors`, `gorm.io/gorm` and `gorm.io/driver/sqlite` (GORM's SQLite driver), with what they pull in; `golang.org/x/image` (already pulled in by Glutter) only for the Go Mono font of the widget tests. Ask before adding any other
 - **cgo only for SQLite**: the one cgo in the app is `mattn/go-sqlite3`, under GORM's driver. Jailcat's own code never writes `import "C"`, and no other dependency may need cgo
 - Run external programs with `exec.CommandContext` and an argument list, never through `sh -c`, and only `firejail` itself (and, in `jailcat_firejail` tests, the launchers a build wrote)
 - The database, the file system and `firejail` are used off the UI thread. Only the UI thread touches the widgets; other goroutines hand results back through `SetState` or the binding's `Post` (Glutter SPEC §13)

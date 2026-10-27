@@ -107,6 +107,10 @@ type Editor struct {
 	// change so a stored build keeps what this version does not know.
 	overrides firejail.Overrides
 	extra     []string
+	// extraRows are the rows extraProblems were found for, see [Editor.SetExtraProblems].
+	extraRows     []string
+	extraProblems []firejail.Problem
+	extraDone     bool
 
 	saved snapshot
 	// hasDraft is true while the database holds a draft of the build; fromDraft that the
@@ -331,9 +335,21 @@ func (e *Editor) resetTo(changes firejail.Overrides) {
 	e.recompute()
 }
 
-// Problems checks the settings (SPEC §6): a problem with the error severity blocks
-// Build and Try.
-func (e *Editor) Problems() []firejail.Problem { return firejail.Validate(e.final, e.home) }
+// Problems checks the settings (SPEC §6) and lists the errors found in the Extra rules
+// (see [Editor.SetExtraProblems]): a problem with the error severity blocks Build and
+// Try. The warnings of the Extra rules are not here; the Extra rules tab shows them.
+func (e *Editor) Problems() []firejail.Problem {
+	out := firejail.Validate(e.final, e.home)
+	if !e.ExtraRulesChecked() {
+		return out
+	}
+	for _, p := range e.extraProblems {
+		if p.Severity == firejail.SeverityError {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 // SwitchProfile makes the profile at path the base profile (SPEC §6.1); base and
 // profile are what the backend read from it. With keep, the user's changes stay and
@@ -342,6 +358,7 @@ func (e *Editor) Problems() []firejail.Problem { return firejail.Validate(e.fina
 func (e *Editor) SwitchProfile(path string, base firejail.Base, profile *firejail.Profile, keep bool) {
 	old := e.overrides
 	e.baseProfile, e.base, e.profile = path, base, profile
+	e.extraDone = false // the rows are checked against the base
 	e.baseline = e.makeBaseline(base)
 	if keep {
 		e.final = old.Apply(base.Settings)

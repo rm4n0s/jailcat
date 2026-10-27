@@ -476,7 +476,7 @@ func TestPrepareTagsRoutes(t *testing.T) {
 		{"sandbox name that escapes", func(r *Request) { r.Settings.SandboxName = "../../evil" }, TagSandboxNameInvalid, "Prepare." + TagSandboxNameInvalid},
 		{"sandbox name with a capital", func(r *Request) { r.Settings.SandboxName = "Firejail" }, TagSandboxNameInvalid, "Prepare." + TagSandboxNameInvalid},
 		{"no profile", func(r *Request) { r.Profile = nil }, tagProfileMissing, "Prepare." + tagProfileMissing},
-		{"bad icon mode", func(r *Request) { r.Settings.Icon = "neon" }, tagIconModeInvalid, "Prepare->iconFile." + tagIconModeInvalid},
+		{"bad icon mode", func(r *Request) { r.Settings.Icon = "neon" }, TagIconModeInvalid, "Prepare->iconFile->RenderIcon." + TagIconModeInvalid},
 		{"empty menu name", func(r *Request) { r.Settings.MenuName = " " }, tagMenuNameEmpty, "Prepare->desktopFile." + tagMenuNameEmpty},
 		{"app entry missing", func(r *Request) { r.App.DesktopPath = filepath.Join(t.TempDir(), "gone.desktop") }, tagAppEntryReadFailed,
 			"Prepare->desktopFile->readAppEntry." + tagAppEntryReadFailed},
@@ -518,7 +518,7 @@ func TestPrepareBadgeIconCanceled(t *testing.T) {
 	s.SandboxName = "firejail-demo"
 	s.MenuName = "Demo"
 	_, err := Prepare(ctx, fakeDirs(t), Request{BuildID: 3, App: vscodeApp(t), Settings: s, Profile: stubProfile(3), Firejail: "/usr/bin/firejail"})
-	requireRoute(t, err, icons.TagBadgeCanceled, "Prepare->iconFile->badgeIcon->BadgeIcon")
+	requireRoute(t, err, icons.TagBadgeCanceled, "Prepare->iconFile->RenderIcon->badgeIcon->BadgeIcon")
 }
 
 func TestPreviewTexts(t *testing.T) {
@@ -531,5 +531,35 @@ func TestPreviewTexts(t *testing.T) {
 		if !strings.Contains(text, firejail.HeaderLine) || !strings.Contains(text, "jailcat-build: 3") {
 			t.Errorf("a text lacks the header:\n%s", text)
 		}
+	}
+}
+
+func TestRenderIconIsWhatPrepareWrites(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name         string
+		icon         string
+		mode         firejail.IconMode
+		wantFallback bool
+	}{
+		{"badge", absPath(t, "icons", "code.svg"), firejail.IconBadge, false},
+		{"random", absPath(t, "icons", "code.svg"), firejail.IconRandom, false},
+		{"badge without an icon", "", firejail.IconBadge, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := vscodeApp(t)
+			app.Icon = tt.icon
+			p, _ := prepareApp(t, app, func(s *firejail.Settings) { s.Icon, s.IconSeed = tt.mode, 77 })
+			s := firejail.DefaultSettings()
+			s.MenuName, s.Icon, s.IconSeed = "Demo (sandboxed)", tt.mode, 77
+			got, fallback, err := RenderIcon(ctx, fakeDirs(t), "hicolor", app, s)
+			if err != nil {
+				t.Fatalf("RenderIcon: %v", err)
+			}
+			if !bytes.Equal(got, file(t, p, KindIcon).Content) || fallback != p.IconFallback || (fallback != "") != tt.wantFallback {
+				t.Errorf("RenderIcon differs from Prepare: fallback %q (Prepare %q)", fallback, p.IconFallback)
+			}
+		})
 	}
 }

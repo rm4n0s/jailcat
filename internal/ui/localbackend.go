@@ -65,20 +65,12 @@ func (b *LocalBackend) ListBuilds(ctx context.Context) ([]store.Build, error) {
 func (b *LocalBackend) LookupIcon(ctx context.Context, app apps.App) (icons.Icon, error) {
 	b.iconMu.Lock()
 	res, ok := b.iconCache[app.Icon]
-	theme, themeSet := b.theme, b.themeSet
 	b.iconMu.Unlock()
 	if ok {
 		return res.icon, res.err
 	}
 
-	if !themeSet {
-		theme = icons.CurrentTheme(ctx, b.dirs)
-		if ctx.Err() == nil {
-			b.iconMu.Lock()
-			b.theme, b.themeSet = theme, true
-			b.iconMu.Unlock()
-		}
-	}
+	theme := b.iconTheme(ctx)
 	icon, err := icons.Lookup(ctx, b.dirs, theme, app.Icon)
 	if err != nil {
 		if appErr, isApp := errors.FromError(err); isApp && appErr.Tag == icons.TagIconNotFound {
@@ -89,6 +81,24 @@ func (b *LocalBackend) LookupIcon(ctx context.Context, app apps.App) (icons.Icon
 	}
 	b.remember(app.Icon, iconResult{icon: icon})
 	return icon, nil
+}
+
+// iconTheme returns the name of the user's current icon theme, which is read on the
+// first call; a call whose ctx was cancelled does not keep the answer.
+func (b *LocalBackend) iconTheme(ctx context.Context) string {
+	b.iconMu.Lock()
+	theme, themeSet := b.theme, b.themeSet
+	b.iconMu.Unlock()
+	if themeSet {
+		return theme
+	}
+	theme = icons.CurrentTheme(ctx, b.dirs)
+	if ctx.Err() == nil {
+		b.iconMu.Lock()
+		b.theme, b.themeSet = theme, true
+		b.iconMu.Unlock()
+	}
+	return theme
 }
 
 // remember keeps the answer for an Icon= value.

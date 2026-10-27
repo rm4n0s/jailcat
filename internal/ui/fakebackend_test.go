@@ -9,6 +9,7 @@ import (
 
 	"github.com/rm4n0s/jailcat/internal/apps"
 	"github.com/rm4n0s/jailcat/internal/firejail"
+	"github.com/rm4n0s/jailcat/internal/icons"
 	"github.com/rm4n0s/jailcat/internal/store"
 )
 
@@ -159,4 +160,62 @@ func (f *fakeBackend) buildNamed(name string) (store.Build, bool) {
 		}
 	}
 	return store.Build{}, false
+}
+
+// SandboxNameTaken answers from the builds of the fake.
+func (f *fakeBackend) SandboxNameTaken(ctx context.Context, name string, exceptBuildID int64) (bool, error) {
+	f.mu.Lock()
+	f.nameAsks = append(f.nameAsks, name)
+	gate, err := f.nameGate, f.nameErr
+	f.mu.Unlock()
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return false, ctx.Err()
+		}
+	}
+	if err != nil {
+		return false, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, b := range f.builds {
+		if b.SandboxName == name && b.ID != exceptBuildID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// PreviewIcon answers with previewSVG when a test set it, else makes the icon of the
+// settings like install.RenderIcon, looking the app's icon up in the icons map.
+func (f *fakeBackend) PreviewIcon(ctx context.Context, app apps.App, s firejail.Settings) ([]byte, string, error) {
+	f.mu.Lock()
+	f.previewAsks = append(f.previewAsks, s)
+	data, fallback, err := f.previewSVG, f.previewFallback, f.previewErr
+	icon, found := f.icons[app.Icon]
+	f.mu.Unlock()
+	if err != nil {
+		return nil, "", err
+	}
+	if data != nil {
+		return data, fallback, nil
+	}
+	if s.Icon == firejail.IconRandom {
+		return icons.RandomIcon(s.IconSeed, s.MenuName), "", nil
+	}
+	if !found {
+		return icons.RandomIcon(s.IconSeed, s.MenuName), fmt.Sprintf("the app's icon %q was not found", app.Icon), nil
+	}
+	data, err = icons.BadgeIcon(ctx, icon)
+	return data, "", err
+}
+
+// CheckExtraRules checks with the folders of the fixture firejail.
+func (f *fakeBackend) CheckExtraRules(_ context.Context, rows []string, base firejail.Base) []firejail.Problem {
+	f.mu.Lock()
+	f.checkAsks = append(f.checkAsks, slices.Clone(rows))
+	f.mu.Unlock()
+	return firejail.CheckExtraRules(rows, f.fj.dirs, base)
 }

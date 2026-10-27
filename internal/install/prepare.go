@@ -146,24 +146,14 @@ func launcherFile(dirs xdg.Dirs, req Request, profilePath string) (File, error) 
 	}), nil
 }
 
-// iconFile makes the SVG icon (SPEC §10). The second result is the reason a random icon
-// was made when the settings ask for the app's icon with the badge and it cannot be
-// used: no icon, an icon that is not found, or a source Jailcat cannot draw.
+// iconFile makes the SVG icon file (SPEC §10). The second result is the reason a random
+// icon was made when the settings ask for the app's icon with the badge and it cannot be
+// used, see [RenderIcon].
 func iconFile(ctx context.Context, dirs xdg.Dirs, req Request) (File, string, error) {
 	s := req.Settings
-	var content []byte
-	fallback := ""
-	switch s.Icon {
-	case firejail.IconRandom:
-		content = icons.RandomIcon(s.IconSeed, s.MenuName)
-	case firejail.IconBadge:
-		var err error
-		content, fallback, err = badgeIcon(ctx, dirs, req)
-		if err != nil {
-			return File{}, "", err
-		}
-	default:
-		return File{}, "", errors.New(tagIconModeInvalid, "the icon choice is not one of the two", "mode", string(s.Icon))
+	content, fallback, err := RenderIcon(ctx, dirs, req.IconTheme, req.App, s)
+	if err != nil {
+		return File{}, "", err
 	}
 	return withSum(File{
 		Kind:    KindIcon,
@@ -173,18 +163,34 @@ func iconFile(ctx context.Context, dirs xdg.Dirs, req Request) (File, string, er
 	}), fallback, nil
 }
 
+// RenderIcon makes the SVG icon a build with the settings s installs (SPEC §10): the
+// app's icon with the badge for [firejail.IconBadge], a random icon of s.IconSeed and
+// s.MenuName for [firejail.IconRandom]. [Prepare] writes it, and the Launcher tab draws
+// it as a preview, so both show the same picture. The second result is the reason a
+// random icon was made when s asks for the app's icon with the badge and it cannot be
+// used: no icon, an icon that is not found, or a source Jailcat cannot draw. theme is
+// the name of the current icon theme. It writes nothing.
+func RenderIcon(ctx context.Context, dirs xdg.Dirs, theme string, app apps.App, s firejail.Settings) ([]byte, string, error) {
+	switch s.Icon {
+	case firejail.IconRandom:
+		return icons.RandomIcon(s.IconSeed, s.MenuName), "", nil
+	case firejail.IconBadge:
+		return badgeIcon(ctx, dirs, theme, app, s)
+	}
+	return nil, "", errors.New(TagIconModeInvalid, "the icon choice is not one of the two", "mode", string(s.Icon))
+}
+
 // badgeIcon makes the app's icon with the badge, or a random icon with the reason when
 // the app's icon cannot be used. Any other failure (a cancelled ctx, an unreadable
 // file) is an error.
-func badgeIcon(ctx context.Context, dirs xdg.Dirs, req Request) ([]byte, string, error) {
-	s, app := req.Settings, req.App
+func badgeIcon(ctx context.Context, dirs xdg.Dirs, theme string, app apps.App, s firejail.Settings) ([]byte, string, error) {
 	random := func(reason string) ([]byte, string, error) {
 		return icons.RandomIcon(s.IconSeed, s.MenuName), reason, nil
 	}
 	if app.Icon == "" {
 		return random("the app has no icon")
 	}
-	src, err := icons.Lookup(ctx, dirs, req.IconTheme, app.Icon)
+	src, err := icons.Lookup(ctx, dirs, theme, app.Icon)
 	if err != nil {
 		if appErr, ok := errors.FromError(err); ok && appErr.Tag == icons.TagIconNotFound {
 			return random(fmt.Sprintf("the app's icon %q was not found", app.Icon))
@@ -262,8 +268,11 @@ const (
 	// that is empty or has a character outside [a-z0-9-].
 	TagSandboxNameInvalid = "SandboxNameInvalid"
 
+	// TagIconModeInvalid is the tag of the error [RenderIcon] (and so [Prepare]) returns
+	// for an icon choice that is neither the badge nor a random icon.
+	TagIconModeInvalid = "IconModeInvalid"
+
 	tagProfileMissing     = "ProfileMissing"
-	tagIconModeInvalid    = "IconModeInvalid"
 	tagPrivateDirInvalid  = "PrivateDirInvalid"
 	tagPrivateHomeOutside = "PrivateHomeOutside"
 )

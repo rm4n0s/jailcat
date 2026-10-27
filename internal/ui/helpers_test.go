@@ -17,8 +17,10 @@ import (
 	"github.com/rm4n0s/glutter/foundation"
 	"github.com/rm4n0s/glutter/gluttertest"
 	m "github.com/rm4n0s/glutter/material"
+	"golang.org/x/image/font/gofont/gomono"
 
 	"github.com/rm4n0s/jailcat/internal/apps"
+	"github.com/rm4n0s/jailcat/internal/firejail"
 	"github.com/rm4n0s/jailcat/internal/icons"
 	"github.com/rm4n0s/jailcat/internal/store"
 )
@@ -101,6 +103,21 @@ type fakeBackend struct {
 	saves []string
 	// lookups counts the calls of BuildsForApp.
 	lookups int
+
+	// nameAsks lists the names SandboxNameTaken was asked about; nameErr is its error and
+	// nameGate, when not nil, holds it until it is closed.
+	nameAsks []string
+	nameErr  error
+	nameGate chan struct{}
+	// previewAsks lists the settings PreviewIcon was asked for. previewSVG, when not nil,
+	// is its answer with previewFallback; previewErr is its error; otherwise it makes the
+	// icon from the icons map like install.RenderIcon.
+	previewAsks     []firejail.Settings
+	previewSVG      []byte
+	previewFallback string
+	previewErr      error
+	// checkAsks lists the rows CheckExtraRules was asked about.
+	checkAsks [][]string
 }
 
 // set changes the fields under the lock.
@@ -268,7 +285,9 @@ func newPage(t *testing.T, backend *fakeBackend) *page {
 	useLinux(t)
 	log := &syncBuffer{}
 	logger := slog.New(slog.NewTextHandler(log, nil))
-	ts := gluttertest.New(t, gluttertest.Opts{Size: windowSize})
+	// The generic "monospace" of the Extra rules tab is Go Mono in the tests: a test does not
+	// use the fonts of the machine, so the goldens are the same everywhere.
+	ts := gluttertest.New(t, gluttertest.Opts{Size: windowSize, Fonts: []gluttertest.Font{{Family: monoFamily, Data: gomono.TTF}}})
 	ts.PumpWidget(NewApp(backend, logger))
 	return &page{t: t, ts: ts, backend: backend, log: log}
 }

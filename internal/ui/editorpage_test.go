@@ -254,8 +254,8 @@ func TestChangedFolderRowAndExtraRulesDot(t *testing.T) {
 		t.Error("the folder row is still there after Reset")
 	}
 	p.selectTab(TabExtraRules)
-	if !p.ts.Exists(gluttertest.ByText("net none")) {
-		t.Error("the extra rule is not listed")
+	if got := p.textOf("extra:field"); got != "net none" {
+		t.Errorf("the extra rule is not in the box: %q", got)
 	}
 }
 

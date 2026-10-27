@@ -220,7 +220,7 @@ All off by default.
 - Maximum open files (`rlimit-nofile`), maximum processes (`rlimit-nproc`)
 
 ### §7.8 Launcher tab
-- **Sandbox name**: default `firejail-<binary name>`, sanitized to `[a-z0-9-]`; for a second build of the same app, `-2`, `-3`…
+- **Sandbox name**: default `firejail-<binary name>`, sanitized to `[a-z0-9-]`; for a second build of the same app, `-2`, `-3`…; a typed name is stored only once it is valid and no other build has it; renaming moves an Own private home that sits at its default `<homes>/<name>`, and Build removes an installed build's old files
 - **Menu name**: default "<app name> (sandboxed)"; **Comment**: default the app's comment
 - **Icon**: App icon with badge / Random (with **New random icon**) (§10)
 - **Install in the menu** (on), **Install in the bin folder** (on); at least one must be on

@@ -267,3 +267,19 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   Memory 2 GB (changed, Reset), eight CPU core checkboxes, the other limits off; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** turning a limit on starts it at a sensible value (1 GB, priority 10, 1 hour, 1024 files, 256 processes) so the model is never on-but-empty. MB/GB are powers of 1024, as firejail's suffixes. The goldens show the top of each tab; the lower controls are covered by widget tests.
+
+## 4.6 Launcher and Extra rules tabs
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.6-launcher-extra-rules
+- **Summary:** The Launcher tab of SPEC §7.8 (sandbox name checked for format and uniqueness, renaming moving a default private home, menu name, comment, badge or random icon with a live preview made by the same `install.RenderIcon` that Build uses, the install and behaviour switches, the bin-folder note) and the Extra rules tab of §7.9 (a numbered monospace editor checked off the UI thread with row-numbered warnings and errors, errors blocking Build through `Editor.Problems()`, and the base profile's uncovered lines grouped by file, virtualized, with false conditionals marked).
+- **Main files:** `internal/ui/launchertab.go`, `extrarulestab.go`, `editor_launcher.go`, their tests; `internal/install/prepare.go` (`RenderIcon`); `backend.go`/`localbackend*.go` (`SandboxNameTaken`, `PreviewIcon`, `CheckExtraRules`); `go.mod`, `CLAUDE.md` (test fonts).
+- **Tests:** every launcher control; renames with and without a base `PrivateDir`; preview in both modes with the fallback reason; Extra rules problems, stale checks ignored, groups collapsing, a 3,000-line group virtualized; `LocalBackend` tests for the three methods; route tests; goldens `launcher-tab`, `extra-rules-tab`, `extra-rules-groups`.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![4.6 Launcher tab](implemented-proof-images/4.6-launcher.png)
+  Calculator's Launcher tab: sandbox name, a changed menu name, the comment, badge mode with the 96 px preview of its icon and the badge; viewed by the manager.
+  ![4.6 Extra rules tab](implemented-proof-images/4.6-extra-rules.png)
+  VS Code's Extra rules with a warning on row 1 (`net none` belongs to the Network tab) and an error on row 3, and the first base-profile group open with a conditional line; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** the widget tests use the Go Mono font from `golang.org/x/image` (already in the module graph through Glutter; CLAUDE.md updated) so goldens are the same on every machine. Rows are checked on every keystroke with a sequence number instead of a debounce. Long rows wrap and their numbers drift (Glutter's text field always wraps). Step 4.7 must re-check Extra rules before Build when `ExtraRulesChecked()` is false. SPEC §7.8 updated for renames.
