@@ -97,3 +97,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** SPEC §8.1 corrected from firejail's source: only missing `.local` includes are skipped, there is a depth limit instead of a cycle check, `whitelist-ro` and `noprinters` make lines no `ignore` can remove, and the conditionals' triggers are listed. §9.1 says rows from `whitelist-ro` are locked; §7.2 allows four DNS servers. `keep-hostname` (a removed command) is not in the command list. A bare include name is not looked up in the working directory, which firejail does as a last resort.
+
+## 2.2 Settings and base values (`internal/firejail`, model)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-2.2-settings-model
+- **Summary:** `Settings` holds every setting of SPEC §7, and a field table (`Fields()`) gives each one its tab, getter, setter and equality, so diffing, applying, JSON and tests are built on it. `BaseValues` maps a read profile to settings, keeping the base lines behind each value (for step 2.3's `ignore` lines), the folder rows of the `.profile` and `.local` files, and the uncovered lines grouped by file. `Overrides` stores only what the user changed, as versioned JSON that keeps fields it doesn't know. `Validate` returns the problems the UI shows.
+- **Main files:** `internal/firejail/settings.go`, `fields.go`, `base.go`, `overrides.go`, `validate.go`, their tests.
+- **Tests:** the VS Code chain field by field (sound, camera, U2F, DVD, input, TV blocked; private `/dev`, `/tmp`, cache; firewall from `blink-common.profile`; five folder rows; no seccomp, nonewprivs or noroot, since Electron runs its own sandbox), `default.profile`, about 75 per-command cases, diff/apply round trips generated from the field table, folder overrides with locked rows, JSON with unknown fields, every validation rule; route tests for the 4 tags.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** `BaseValues` takes the home path as a second argument. Folder rows come from `.profile` and `.local` files; system folders and globs go to the read-only list (SPEC §7.1 updated). Base rows stay with Empty and Own private home, where `${HOME}` is the private home (SPEC §7.1). From firejail's source: `protocol` lines merge with `+`/`-`/`=`, `cpu` takes 0–31, `nice` is clamped to 0 for non-root, `rlimit-as` takes K/M/G (SPEC §7.7 updated). Launcher fields never come from a profile except `join-or-start`.

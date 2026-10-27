@@ -141,9 +141,9 @@ Every field shows its base value until the user changes it. "Default" below is t
 
 Default with **None**: Full home. With a base profile: what it sets (a `private` line → Empty or Own private home; `whitelist` lines under `${HOME}` → Only the folders I choose; otherwise Full home).
 
-**Folder list**: rows of a path (from the folder chooser, `desktop.OpenFiles` with `Directory: true`, or typed) and an access level: **Read-write**, **Read-only** or **Hidden**. Rows that come from the base profile (its `whitelist`, `read-only`, `blacklist` and `noblacklist` lines for folders, after `ignore`) are shown with a "from profile" mark; changing or removing one is an override.
+**Folder list**: rows of a path (from the folder chooser, `desktop.OpenFiles` with `Directory: true`, or typed) and an access level: **Read-write**, **Read-only** or **Hidden**. Rows that come from the base profile are shown with a "from profile" mark; changing or removing one is an override. They are the `whitelist`, `read-only`, `read-write`, `blacklist` and `noblacklist` lines (after `ignore`) of the base chain's `.profile` files only: the shared `.inc` files (`disable-common.inc` alone has hundreds of `blacklist` lines) go to the read-only list of §7.9, so the list shows what is particular to this app. Lines for system folders (`/dev`, `/proc`, `/sys`, `/run`, `/tmp`, `/etc`, `/usr`, `/var`, `/boot`, `/bin`, `/sbin`, `/lib*`, `/root`), globs and the home itself are not rows either; they go to the read-only list.
 - With **Only the folders I choose**, the folders the base profile allows under the home (its `noblacklist`/`whitelist` lines, e.g. `~/.config/Code` and `~/.vscode` for VS Code) are listed as Read-write rows from the profile, so the app keeps its own settings
-- With **Own private home** and **Empty home**, the real home stays out of the sandbox completely (the owner's decision, 2026-10-27): the folder list accepts only folders outside the home (`/mnt/data`, `/opt/projects`), and the chooser's answer inside the real home is refused with a message that says so
+- With **Own private home** and **Empty home**, the real home stays out of the sandbox completely (the owner's decision, 2026-10-27): the folder list accepts only folders outside the home (`/mnt/data`, `/opt/projects`), and the chooser's answer inside the real home is refused with a message that says so. Rows from the base profile stay: inside a private home `${HOME}` is the private home, so `${HOME}/.config/Code` names the app's own folder there, not the real one
 
 **Quick toggles**: Downloads read-write (`${DOWNLOADS}`), Hide removable drives (`disable-mnt`), No programs from home (`noexec ${HOME}`), Private `/tmp` (`private-tmp`), Private `/dev` (`private-dev`), Private cache (`private-cache`).
 
@@ -205,9 +205,9 @@ These defaults are Jailcat's: with **None** they are written as lines, because a
 
 ### §7.7 Limits tab
 All off by default.
-- Memory (`rlimit-as`), entered with a unit (MB, GB), written in bytes
-- CPU cores (`cpu`): checkboxes, one per core
-- Priority (`nice`): −20 to 19
+- Memory (`rlimit-as`), entered with a unit (MB, GB), written in bytes (firejail also reads `K`/`M`/`G` suffixes in a base profile)
+- CPU cores (`cpu`): checkboxes, one per core (firejail accepts cores 0–31)
+- Priority (`nice`): −20 to 19; firejail turns a negative value into 0 for a user who is not root, and the field says so
 - Time limit (`timeout hh:mm:ss`)
 - Maximum open files (`rlimit-nofile`), maximum processes (`rlimit-nproc`)
 
