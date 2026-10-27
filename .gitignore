@@ -31,3 +31,11 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Jailcat
+/jailcat
+.jailcat-test/
+*.db
+
+# Worker briefs (docs/IMPLEMENTATION.md, "Who does the work")
+.claude/briefs/
