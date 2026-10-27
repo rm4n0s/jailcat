@@ -61,3 +61,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** `JoinExec` returns `(string, error)` (an unlisted field code is refused). A repeated key in a group is an error (`DuplicateKey`), as the spec says; a file that fails to parse is skipped by step 1.3. A newline in an `Exec` argument is written inside quotes and escaped as `\n`. Deprecated field codes are dropped on reading.
+
+## 1.3 Finding apps (`internal/apps`)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-1.3-finding-apps
+- **Summary:** `apps.Scan` lists every app of SPEC §4: desktop entries from the user and system `applications` folders (first folder wins for an ID, `Hidden`, `NoDisplay`, `TryExec`, Jailcat's own entries dropped), with the binary resolved through `env`, firejail wrappers, Flatpak, Snap and firecfg symlinks, and every executable on `$PATH` not already run by an entry. Dropped entries come back in `Skipped` with a reason. `Search` filters and orders the list (§4.3). On this machine (checked once by the manager) it finds 202 desktop apps and 3,329 binaries, and the 20 skipped entries are real faults (missing binaries, no `Exec`).
+- **Main files:** `internal/apps/apps.go`, `desktop.go`, `command.go`, `lookup.go`, `binaries.go`, `search.go`, their tests, `testdata/fake/` (43 desktop fixtures).
+- **Tests:** the whole fake system (shadowed and hidden IDs, every `Exec` form, firecfg symlink shadowing, `$PATH` order, actions, locales, unreadable folders); `LocaleFromEnv`; `Search` fields, ordering, filters; the `ScanCancelled` route test.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** an unknown `env` option (`-S`, `-C`) drops the entry instead of guessing; a Snap path is not checked for existence; an entry with no `Name` falls back to the binary name; the Flatpak and Snap launchers themselves stay in the binaries list.

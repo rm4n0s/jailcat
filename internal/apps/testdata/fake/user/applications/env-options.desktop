@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Env Options
+Exec=/usr/bin/env -i -u HOME --unset=FOO A=b -- C=d prog --flag %f

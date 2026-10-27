@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Wrapped Env
+Exec=firejail --private env A=b prog

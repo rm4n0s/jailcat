@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Missing Binary
+Exec=no-such-program-anywhere --x

@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Wrapped
+Exec=firejail --private --net=none prog %U

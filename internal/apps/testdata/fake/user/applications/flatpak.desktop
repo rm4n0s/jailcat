@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Flat App
+Exec=flatpak run --branch=stable --arch=x86_64 org.example.Flat @@u %U @@

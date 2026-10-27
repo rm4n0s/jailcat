@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Wrapped Dashdash
+Exec=@ROOT@/fakefj/firejail --quiet -- prog

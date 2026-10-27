@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Hidden Value Is Bad
+Hidden=maybe
+NoDisplay=yes
+Terminal=1
+Exec=onlybin3

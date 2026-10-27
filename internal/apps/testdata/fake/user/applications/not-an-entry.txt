@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Not A Desktop File
+Exec=prog

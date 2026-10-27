@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Firecfg Absolute
+Exec=@ROOT@/bin1/firecfgapp --x

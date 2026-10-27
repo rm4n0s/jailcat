@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Snap Browser
+Exec=env BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/snapbrowser_snapbrowser.desktop /snap/bin/snapbrowser %u

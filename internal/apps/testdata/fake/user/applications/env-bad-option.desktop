@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Env Bad Option
+Exec=env -S "a b" prog

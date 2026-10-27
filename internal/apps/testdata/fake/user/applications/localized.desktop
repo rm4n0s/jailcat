@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Localized
+Name[de]=Lokalisiert
+Name[fr]=Localisé
+GenericName=Editor
+GenericName[de]=Texteditor
+Comment=A comment
+Comment[de]=Ein Kommentar
+Keywords=text;edit;
+Keywords[de]=Text;Bearbeiten;
+Icon=accessories-text-editor
+Exec=prog %F
+Terminal=true

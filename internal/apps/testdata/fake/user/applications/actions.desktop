@@ -1,0 +1,30 @@
+[Desktop Entry]
+Type=Application
+Name=With Actions
+Icon=@ROOT@/icons/actions.svg
+Exec=envprog %U
+Actions=same;other;wrapped;missing;gone;same;noexec;
+
+[Desktop Action same]
+Name=Same Binary
+Name[de]=Gleiches Programm
+Exec=envprog --new-window %U
+
+[Desktop Action other]
+Name=Other Binary
+Exec=prog --other
+
+[Desktop Action wrapped]
+Name=Wrapped Same
+Exec=env A=b @ROOT@/bin1/envprog --wrapped
+
+[Desktop Action missing]
+Name=Missing
+Exec=no-such-program-anywhere
+
+[Desktop Action noexec]
+Name=No Exec
+
+[Desktop Action unlisted]
+Name=Unlisted
+Exec=envprog

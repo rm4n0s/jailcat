@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=Code (sandboxed)
+Exec=@ROOT@/home/.local/bin/firejail-code %F
+X-Jailcat-Build=7

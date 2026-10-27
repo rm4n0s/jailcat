@@ -1,0 +1,4 @@
+[Desktop Entry]
+Type=Application
+Name=Absolute Directory
+Exec=@ROOT@/bin1/adir
