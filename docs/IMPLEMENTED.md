@@ -173,3 +173,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** C: `internal/install/testdata/golden/vscode.desktop`, `vscode.sh` (the launcher), `vscode.profile`, reviewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** `Install` takes the owner lookup (it re-runs `Check`); `UninstallOpts` carries `Dirs`. An edited file is overwritable only if it still has Jailcat's header. The main `Exec` keeps only the app's first field code, not its other arguments. An empty menu name is refused when the entry is installed.
+
+## 3.4 Running firejail (Try and the build check)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-3.4-running-firejail
+- **Summary:** `firejail.Runner` runs Try (SPEC §11.2: a temporary profile, `--name=jailcat-try-<name>`, its own process group, streamed output, `Stop` through `--shutdown` then a kill) and the build check (§11.3 step 5: `firejail --profile=… -- true`, with `--ignore=private-bin` for builds with Only these programs). The "existing sandbox" warning is its own tag. Real-firejail tests prove what the installed launchers do: hidden folders are invisible, read-only folders can't be written, Only the folders I choose hides the rest, `net none` leaves `lo`, `ignore` above the `include` undoes a base line, Own private home keeps the base's `mkdir` lines out of the real home, and Try starts and stops a named sandbox.
+- **Main files:** `internal/firejail/run.go`, `run_test.go`, `run_firejail_test.go`; `internal/install/firejail_test.go`; `docs/SPEC.md` §11.3.
+- **Tests:** unit tests with a fake firejail (argument lists, streaming, stop, cancel, no leftover processes, the ignore-limit skip); route tests for every tag; 13 real-firejail tests (`-tags jailcat_firejail`), run by the manager outside Claude Code's sandbox.
+- **Checks:** gofmt ✅ · go vet ✅ (with and without the tag) · golangci-lint ✅ (with and without the tag) · go test -race ✅ · firejail tests ✅ · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** the check runs without `--quiet`, which would hide the nested-sandbox warning (SPEC §11.3 updated). The private-home probe first failed on `.bashrc` and `.inputrc`: firejail copies `/etc/skel` files into a fresh home (`fs_home.c`, `skel`), so the probe now allows them. The temporary home of the tests cannot be the sandbox's `$HOME` (firejail takes the account's home), so the probes use folders under `/tmp`.

@@ -378,7 +378,7 @@ A dialog with read-only tabs: Profile, Launcher, Desktop entry. Lines that come 
 2. Check the targets (§9.5)
 3. Write the profile, the launcher, the icon, the desktop entry; create the private home folder if needed
 4. Record the files, the firejail version and the time in the database
-5. Check: run the installed launcher's command with `true` in place of the app (`firejail --quiet --profile=… -- true`) and show a warning with firejail's output if it fails
+5. Check: run the installed launcher's command with `true` in place of the app (`firejail --profile=… -- true`) and show a warning with firejail's output if it fails. There is no `--quiet` on this command line: with it firejail does not print its warning "an existing sandbox was detected", which the check must see (the profile's own `quiet` line already silences firejail's banner). For a build with "Only these programs" (`private-bin`), where `true` might not be in the sandbox, the command is `firejail --ignore=private-bin --profile=… -- true`. That command-line ignore counts toward firejail's limit of 32 `ignore` entries (§9.1): if the build already has 32, the check is skipped and the reason is shown in place of the result
 
 ## §12 Database
 
