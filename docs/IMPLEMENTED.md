@@ -85,3 +85,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** pixmaps are searched in `<each XDG data dir>/pixmaps` rather than only `/usr/share/pixmaps` (the same folder by default). The first theme in the chain that has the icon wins, even if a parent has a larger one. `LoadTheme`, `BaseDirs` and `PixmapDirs` are exported for the UI.
+
+## 2.1 Reading profiles (`internal/firejail`, reader)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-2.1-profile-reader
+- **Summary:** `firejail.Read` reads a profile and its include chain the way firejail 0.9.80's `profile_read` and `profile_check_line` do: `fgets` chunking, comment and blank normalization (`line_remove_spaces`), include resolution and the depth limit, the ignore list with `is_in_ignore_list`'s matching and the 32-entry limit, every conditional with its real trigger, `quiet`, and the lines firejail makes itself (`whitelist-ro`, `noprinters`). Every rule names the C function it follows. `ReadConfig` reads `firejail.config`; `Commands` lists the 129 profile commands.
+- **Main files:** `internal/firejail/profile_line.go`, `profile_read.go`, `profile_config.go`, `profile_commands.go`, their tests, `testdata/etc-firejail/` (16 files copied unchanged from `/etc/firejail`, GPL-2.0, with a README).
+- **Tests:** `Normalize` and `Matches` tables; the real `code.profile` chain (effective lines, ignore entries, the ignored `dbus-user none` and `disable-xdg.inc`, missing `.local` files); user-folder precedence; every conditional and its ordering; 32 vs 33 ignores; include depth and cycles; `ReadConfig`; route tests for the 15 tags. 98.8% coverage.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** SPEC §8.1 corrected from firejail's source: only missing `.local` includes are skipped, there is a depth limit instead of a cycle check, `whitelist-ro` and `noprinters` make lines no `ignore` can remove, and the conditionals' triggers are listed. §9.1 says rows from `whitelist-ro` are locked; §7.2 allows four DNS servers. `keep-hostname` (a removed command) is not in the command list. A bare include name is not looked up in the working directory, which firejail does as a last resort.

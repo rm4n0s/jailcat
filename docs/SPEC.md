@@ -149,7 +149,7 @@ Default with **None**: Full home. With a base profile: what it sets (a `private`
 
 ### §7.2 Network tab
 - **Network**: Full / None (`net none`). Default: Full
-- **DNS servers**: up to three addresses (`dns`). Default: system
+- **DNS servers**: up to four addresses (`dns`; firejail ignores a fifth, `profile.c`). Default: system
 - **Hosts file**: a file to use as `/etc/hosts` (`hosts-file`). Default: system
 - **Firewall**: firejail's default client filter (`netfilter`). Default: off
 - DNS, hosts file and firewall are disabled while Network is None
@@ -235,13 +235,14 @@ All off by default.
 `internal/firejail` reads a base profile the way firejail does, to compute base values and the read-only list of §7.9.
 
 ### §8.1 Resolution
-- `include <name>`: `${HOME}` and `${CFG}` are expanded; an absolute path is used as is; a bare name is looked up in the firejail user config folder, then in `/etc/firejail`. A missing included file is skipped (firejail skips missing `.local` files). An include cycle is an error
+- `include <name>`: `${HOME}` and `${CFG}` are expanded (`$HOME` without braces is an error); a path with a `/` is used as is; a bare name is looked up in the firejail user config folder, then in `/etc/firejail`. Only a missing file whose name ends in `.local` is skipped; any other missing or unreadable include stops firejail, so it is an error for Jailcat too. Firejail has no cycle check, only a depth limit of 16 includes (`MAX_INCLUDE_LEVEL`); deeper is an error. After an `allow-debuggers` line, an include of `disable-devel.inc` is skipped (`profile_read`)
+- Lines firejail makes before any `ignore` or conditional is applied, so no `ignore` can remove them: `whitelist-ro X` becomes `whitelist X` and `read-only X` (`profile_read`), and `noprinters` adds `blacklist /dev/lp*` and `blacklist /run/cups/cups.sock` (`profile_check_line`)
 - The user's `.local` files (`code.local`, `globals.local`) are read like any include, so their lines count in the base values
 - Macros in paths (`${HOME}`, `${DOWNLOADS}`, `${DESKTOP}`, `${DOCUMENTS}`, `${MUSIC}`, `${PICTURES}`, `${VIDEOS}`, `${PATH}`, `${RUNUSER}`) are kept as written in profile text and expanded only to show paths in the form. `${DOWNLOADS}` and the other user folders resolve as firejail's `macros.c` does: the `XDG_<NAME>_DIR="$HOME/<dir>"` line of `$HOME/.config/user-dirs.dirs` (only values relative to `$HOME`, and only when the folder exists), else the first of firejail's fixed translations that exists in the home (`Downloads`, `Загрузки`, `Téléchargement`, …), else unresolved
 - Each line is first normalized as firejail does (`profile.c`, `line_remove_spaces` in `util.c`): everything from the first `#` is a comment, leading blanks are dropped, and every run of spaces and tabs becomes one space
 - `ignore <text>` adds `<text>` to the ignore list; every line read after it that starts with `<text>` followed by the end of the line or a space is skipped (`is_in_ignore_list`). The match is on the text as written, before macros are expanded: `ignore whitelist ${HOME}/x` does not match `whitelist /home/me/x`. So `ignore nosound` skips `nosound`, `ignore whitelist` skips every `whitelist` line, and `ignore whitelist ${HOME}/.config/Code` also skips `whitelist ${HOME}/.config/Code - OSS`. An `include` line can be ignored too (`ignore include disable-xdg.inc`)
 - Firejail accepts at most 32 `ignore` entries in one sandbox, counting the ones in every included file (`MAX_PROFILE_IGNORE`); one more stops firejail with an error
-- `?CONDITION: line`: conditions whose value Jailcat can know from firejail's `firejail.config` are evaluated; the others put the line in the read-only list as "conditional"
+- `?CONDITION: line` (`profile_check_conditional`): `HAS_NET` is true once a `net` line took effect; `HAS_NODBUS` once `nodbus`, or a `dbus-user`/`dbus-system` line with `filter` or `none`; `HAS_NOSOUND` once `nosound`; `HAS_PRIVATE` once `private` (any form) or `private-home`; `HAS_X11` once `x11 none` or `x11 xorg`; `HAS_APPIMAGE` is false; `BROWSER_DISABLE_U2F` (default yes), `BROWSER_ALLOW_DRM` and `ALLOW_TRAY` (default no) come from `/etc/firejail/firejail.config`. A false conditional line goes to the read-only list as "conditional"; an unknown condition, a missing colon, or `quiet`/`include` after a true condition is an error, as firejail exits on each
 
 ### §8.2 Base values
 - A field's base value comes from the lines that remain after `ignore`; a field with no line gets the firejail default (e.g. sound allowed, network full)
@@ -286,7 +287,7 @@ include /etc/firejail/code.profile
   | Folder Read-write | Only the folders I choose: `whitelist <path>`; else, if the base hides it: `noblacklist <path>` |
   | Folder Read-only | as Read-write, plus `read-only <path>` |
   | Folder Hidden | `blacklist <path>` |
-  | A base folder row removed | `ignore <the base line>` |
+  | A base folder row removed | `ignore <the base line>`. Rows made from `whitelist-ro` cannot be removed or loosened this way (§8.1): the editor shows them locked, with the reason |
   | Home: Only the folders I choose | the `whitelist` lines of the folder rows (a whitelist under `${HOME}` hides the rest of the home) |
   | Home: Empty home | `private` |
   | Home: Own private home | `private ${HOME}/.local/share/jailcat/homes/<sandbox name>` (the real path, written with `${HOME}` when under the home) |
