@@ -1,0 +1,13 @@
+[Icon Theme]
+Name=Hicolor
+Directories=48x48/apps,scalable/apps
+
+[48x48/apps]
+Size=48
+Type=Threshold
+
+[scalable/apps]
+Size=64
+MinSize=1
+MaxSize=512
+Type=Scalable

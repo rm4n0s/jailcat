@@ -73,3 +73,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** an unknown `env` option (`-S`, `-C`) drops the entry instead of guessing; a Snap path is not checked for existence; an entry with no `Name` falls back to the binary name; the Flatpak and Snap launchers themselves stay in the binaries list.
+
+## 1.4 Finding icons (`internal/icons`, lookup part)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-1.4-icon-lookup
+- **Summary:** `icons.Lookup` finds an app's icon by the Icon Theme Specification: absolute paths as they are, then the theme chain (`Inherits`, ending in `hicolor`), scalable SVG first, else the largest fixed size with SVG before PNG, then unthemed files and `pixmaps`; XPM only when nothing else exists. `CurrentTheme` reads the theme name from GTK 4, GTK 3 or KDE settings files. On this machine (checked once by the manager) Firefox gets hicolor's 256px PNG and breeze's own SVGs are found through its `index.theme`.
+- **Main files:** `internal/icons/theme.go`, `lookup.go`, `current.go`, `ini.go`, their tests, `testdata/fake/` (themes `Test` → `Parent` → `hicolor`, a loop, settings files).
+- **Tests:** absolute paths, theme chains and loops, size and format order, XPM and pixmaps fallbacks, `CurrentTheme` sources, I/O failures and cancellation; route tests for the 6 tags. 98.8% coverage.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** pixmaps are searched in `<each XDG data dir>/pixmaps` rather than only `/usr/share/pixmaps` (the same folder by default). The first theme in the chain that has the icon wins, even if a parent has a larger one. `LoadTheme`, `BaseDirs` and `PixmapDirs` are exported for the UI.

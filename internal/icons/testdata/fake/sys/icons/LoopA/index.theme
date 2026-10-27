@@ -1,0 +1,6 @@
+[Icon Theme]
+Inherits=LoopB,Missing,../escape
+Directories=48x48/apps
+
+[48x48/apps]
+Size=48
