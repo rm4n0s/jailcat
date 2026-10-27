@@ -121,3 +121,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** C: the golden profiles `internal/firejail/testdata/profiles/code-changes.profile`, `code-home-private.profile`, `code-over-matching.profile` and `none-defaults.profile`.
 - **Manual checks:** none
 - **Deviations and follow-ups:** the file order is now positive lines, then `ignore` lines, then Extra rules, then `include` (SPEC §9.1 updated). A base conditional line that Jailcat's changes would turn false is written again without its condition; a false one that becomes true is left to firejail. `private-cache` also acts on the real home under `private DIR` (man page), but only as a mount inside the sandbox, so nothing is written for it. Chosen home without any `whitelist` under the home is refused.
+
+## 2.4 Launcher script (`internal/firejail`, launcher)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-2.4-launcher
+- **Summary:** `WriteLauncher` writes the launcher of SPEC §9.2 with the shared header: `exec` of firejail's absolute path, `--profile=…`, `--`, the binary, the extra arguments and `"$@"`, every word through `ShellQuote` (POSIX single quotes; NUL refused). `FindFirejail` finds firejail on `$PATH`, and `Version` reads `firejail --version` with a 5-second limit.
+- **Main files:** `internal/firejail/shellquote.go`, `launcher.go`, `find.go`, their tests, `testdata/launchers/` (4 golden launchers).
+- **Tests:** `ShellQuote` table; golden launchers byte for byte, each passing `sh -n`; a behaviour test where a fake firejail prints its arguments NUL-separated and every user argument (spaces, quotes, `$HOME`, `*`, newline, empty, `--`) arrives unchanged and in order; `FindFirejail` and `Version` cases with fake scripts; route tests for the 9 tags.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none (step 3.4) · display tests none
+- **Proof:** C: `internal/firejail/testdata/launchers/special-args.sh`.
+- **Manual checks:** none
+- **Deviations and follow-ups:** `--` is written unquoted, as in SPEC §9.2. Only Jailcat's own 5-second limit counts as a version timeout; a cancelled caller context is `FirejailVersionFailed`.
