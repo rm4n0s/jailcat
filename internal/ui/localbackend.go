@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/rm4n0s/errors"
@@ -115,6 +116,9 @@ func (b *LocalBackend) Firejail(ctx context.Context) (FirejailInfo, error) {
 	}
 	return FirejailInfo{Path: path, Version: version}, nil
 }
+
+// CPUCount returns the number of logical cores the program can use ([runtime.NumCPU]).
+func (b *LocalBackend) CPUCount() int { return runtime.NumCPU() }
 
 // BinOnPath reports whether the bin folder is one of the folders of $PATH.
 func (b *LocalBackend) BinOnPath() bool {

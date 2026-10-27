@@ -149,6 +149,12 @@ func tabBody(bc m.BuildContext, e *Editor, tab firejail.Tab, act tabActions) m.W
 		return NewDevicesTab(e, act.change)
 	case firejail.TabDesktop:
 		return NewDesktopTab(e, act.backend, act.change)
+	case firejail.TabSecurity:
+		return NewSecurityTab(e, act.change)
+	case firejail.TabPrograms:
+		return NewProgramsTab(e, act.change)
+	case firejail.TabLimits:
+		return NewLimitsTab(e, act.backend, act.change)
 	}
 	var rows []m.Widget
 	if tab == TabExtraRules {

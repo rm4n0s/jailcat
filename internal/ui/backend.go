@@ -30,6 +30,9 @@ type Backend interface {
 	// ProgramOnPath reports whether an executable file called name is in one of the
 	// folders of $PATH (SPEC §7.4: the X11 isolation programs).
 	ProgramOnPath(ctx context.Context, name string) bool
+	// CPUCount returns how many cores this machine has, for the checkboxes of the Limits
+	// tab (SPEC §7.7). It does no I/O.
+	CPUCount() int
 	// HomeDir returns the user's home folder, to recognize folders inside it.
 	HomeDir() string
 	// HomesDir returns the folder of Jailcat's private homes (SPEC §3.1).

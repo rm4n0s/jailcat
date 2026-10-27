@@ -32,6 +32,8 @@ type StringListOpts struct {
 	FullText string
 	// Disabled turns the field and the buttons off; the items stay readable.
 	Disabled bool
+	// Display writes an item as the row shows it; nil shows the item as it is.
+	Display func(item string) string
 }
 
 // StringList is a list of short texts the user can add to and remove from: a row for each
@@ -107,12 +109,16 @@ func (s *stringListState) Build(bc m.BuildContext) m.Widget {
 	}
 	for i, item := range w.items {
 		i := i
+		shown := item
+		if w.o.Display != nil {
+			shown = w.o.Display(item)
+		}
 		var remove func()
 		if !w.o.Disabled {
 			remove = func() { w.onRemove(i) }
 		}
 		col = append(col, m.NewPadding(m.NewEdgeInsetsSymmetric(0, 4), m.NewRow([]m.Widget{
-			m.NewExpanded(m.NewText(item, m.TextOpts{Style: theme.TextTheme.BodyMedium, MaxLines: m.Some(1), Overflow: m.TextOverflowEllipsis})),
+			m.NewExpanded(m.NewText(shown, m.TextOpts{Style: theme.TextTheme.BodyMedium, MaxLines: m.Some(1), Overflow: m.TextOverflowEllipsis})),
 			m.NewIconButton(remove, m.NewIcon(m.Icons.Delete()), m.IconButtonOpts{
 				Key: m.NewValueKey(prefix + ":remove:" + strconv.Itoa(i)), Tooltip: "Remove from the list",
 			}),

@@ -67,6 +67,8 @@ type fakeBackend struct {
 	firejail  FirejailInfo
 	fjErr     error
 	binOnPath bool
+	// cpus is the answer of CPUCount.
+	cpus int
 	// icons maps an Icon= value to the file; a value that is not here is not found.
 	icons map[string]icons.Icon
 	// gate, when not nil, holds ScanApps until it is closed.
@@ -147,6 +149,13 @@ func (f *fakeBackend) Firejail(context.Context) (FirejailInfo, error) {
 }
 
 func (f *fakeBackend) BinOnPath() bool { return f.binOnPath }
+
+// CPUCount answers the cpus field.
+func (f *fakeBackend) CPUCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.cpus
+}
 
 // ProgramOnPath answers from the programs map; a program that is not in it is missing.
 func (f *fakeBackend) ProgramOnPath(_ context.Context, name string) bool {
@@ -229,6 +238,7 @@ func fixtureBackend(t *testing.T) *fakeBackend {
 			{ID: 3, SandboxName: "firejail-code", AppKind: store.AppKindDesktop, DesktopFileID: "Visual Studio Code.desktop", BuiltAt: &built},
 		},
 		firejail: FirejailInfo{Path: "/usr/bin/firejail", Version: "0.9.80"},
+		cpus:     8,
 		// Xpra and Xvfb are installed, Xephyr is not.
 		programs: map[string]bool{"xpra": true, "Xvfb": true},
 		icons: map[string]icons.Icon{

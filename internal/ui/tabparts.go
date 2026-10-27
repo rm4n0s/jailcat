@@ -28,10 +28,38 @@ func markedTitle(label string, mark m.Widget) m.Widget {
 // fieldMark is the [ChangedMark] of a field, or nil when the field has its base value.
 // Reset runs through apply, which changes the editor inside the page's SetState.
 func fieldMark(e *Editor, f firejail.Field, apply func(fn func(e *Editor))) m.Widget {
+	return fieldMarkThen(e, f, apply, nil)
+}
+
+// fieldMarkThen is [fieldMark] for a field whose tab keeps a state of its own (a typed
+// text, a switch): then runs before the reset, inside the same change, to clear it.
+func fieldMarkThen(e *Editor, f firejail.Field, apply func(fn func(e *Editor)), then func()) m.Widget {
 	if !e.Changed(f) {
 		return nil
 	}
-	return NewChangedMark(func() { apply(func(e *Editor) { e.Reset(f) }) }, ChangedMarkOpts{Key: m.NewValueKey("mark:" + string(f))})
+	return NewChangedMark(func() {
+		apply(func(e *Editor) {
+			if then != nil {
+				then()
+			}
+			e.Reset(f)
+		})
+	}, ChangedMarkOpts{Key: m.NewValueKey("mark:" + string(f))})
+}
+
+// candidateProblems returns the messages [firejail.Validate] gives about the field f for
+// the editor's settings after change: it tells whether a value the user typed may be
+// stored, without storing it.
+func candidateProblems(e *Editor, f firejail.Field, change func(st *firejail.Settings)) []string {
+	s := e.Final()
+	change(&s)
+	var out []string
+	for _, p := range firejail.Validate(s, e.home) {
+		if p.Field == f {
+			out = append(out, p.Message)
+		}
+	}
+	return out
 }
 
 // radioTile is one choice of a group of radio tiles: a rounded tile with a title and a
@@ -94,4 +122,31 @@ func problemsOf(e *Editor, f firejail.Field) []string {
 		}
 	}
 	return out
+}
+
+// infoNote is a note that is not an error: a rounded box with an info icon.
+func infoNote(bc m.BuildContext, text string, key m.Key) m.Widget {
+	scheme := m.ThemeOf(bc).ColorScheme
+	return m.NewContainer(m.NewRow([]m.Widget{
+		m.NewIcon(m.Icons.Info(), m.IconOpts{Color: m.Some(scheme.OnSecondaryContainer())}),
+		m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(8.0)}),
+		m.NewExpanded(m.NewText(text, m.TextOpts{
+			Style: m.ThemeOf(bc).TextTheme.BodyMedium.CopyWith(m.TextStyleCopy{Color: m.Some(scheme.OnSecondaryContainer())}),
+		})),
+	}, m.RowOpts{CrossAxisAlignment: m.CrossAxisAlignmentStart}), m.ContainerOpts{
+		Key:     key,
+		Color:   m.Some(scheme.SecondaryContainer()),
+		Padding: m.NewEdgeInsetsAll(12),
+		Margin:  m.NewEdgeInsetsSymmetric(4, 8),
+	})
+}
+
+// warningText is a short line of caution, in the color of errors.
+func warningText(bc m.BuildContext, text string, key m.Key) m.Widget {
+	theme := m.ThemeOf(bc)
+	return m.NewText(text, m.TextOpts{
+		Key:      key,
+		Style:    theme.TextTheme.BodySmall.CopyWith(m.TextStyleCopy{Color: m.Some(theme.ColorScheme.Error())}),
+		MaxLines: m.Some(2), Overflow: m.TextOverflowEllipsis,
+	})
 }

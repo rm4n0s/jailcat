@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/rm4n0s/errors"
@@ -333,5 +334,12 @@ func TestLocalBackendProgramOnPath(t *testing.T) {
 				t.Errorf("ProgramOnPath(%q) = %v, want %v", tt.name, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLocalBackendCPUCount(t *testing.T) {
+	b, _ := newSystem(t, true).newBackend(t)
+	if got := b.CPUCount(); got != runtime.NumCPU() || got < 1 {
+		t.Errorf("CPUCount() = %d, want %d", got, runtime.NumCPU())
 	}
 }

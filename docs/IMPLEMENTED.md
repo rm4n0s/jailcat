@@ -249,3 +249,21 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   Session D-Bus Filtered with Notifications checked and the further-names list; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** from `man firejail`: the firewall applies only with a network namespace of the sandbox's own, the X11 modes need one to close the abstract socket, and D-Bus filtering leaves abstract sockets reachable; Jailcat creates no namespace, so the fields say so (SPEC §7.2, §7.4 updated). `ProgramOnPath` takes a `ctx`. D-Bus names are checked more strictly in the UI than in `Validate`.
+
+## 4.5 Security, Programs and Limits tabs
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.5-security-programs-limits
+- **Summary:** The Security (seven switches, socket types with a "not restricted" state, the JIT warning, a note for Electron/Chromium bases), Programs (Only these programs and /etc files as lists, environment variables, extra arguments shown as they will be quoted) and Limits (memory with MB/GB, CPU cores of this machine, priority, time limit, open files, processes) tabs of SPEC §7.5–§7.7.
+- **Main files:** `internal/ui/securitytab.go`, `programstab.go`, `limitstab.go`, their tests; `tabparts.go`, `stringlist.go` (`Display`), `backend.go`/`localbackend.go` (`CPUCount`).
+- **Tests:** every control sets its field with dot, mark and Reset; the protocol states and the last-checkbox rule; list validation and duplicates; units, ranges and `hh:mm:ss`; CPU counts; goldens `security-tab`, `programs-tab`, `limits-tab`.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![4.5 Security tab](implemented-proof-images/4.5-security.png)
+  VS Code's Security tab with the Electron note, seccomp turned on (changed, Reset) and the JIT warning; viewed by the manager.
+  ![4.5 Programs tab](implemented-proof-images/4.5-programs.png)
+  Only these programs on with `git`, the build-check note, environment variables and extra arguments; viewed by the manager.
+  ![4.5 Limits tab](implemented-proof-images/4.5-limits.png)
+  Memory 2 GB (changed, Reset), eight CPU core checkboxes, the other limits off; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** turning a limit on starts it at a sensible value (1 GB, priority 10, 1 hour, 1024 files, 256 processes) so the model is never on-but-empty. MB/GB are powers of 1024, as firejail's suffixes. The goldens show the top of each tab; the lower controls are covered by widget tests.
