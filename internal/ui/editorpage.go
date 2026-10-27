@@ -29,6 +29,16 @@ type EditorPageOpts struct {
 	Key m.Key
 	// OnDiscardDraft is called when the user presses Discard draft.
 	OnDiscardDraft func()
+	// Try runs the Try of the window; the page makes its own when it is nil.
+	Try *TryController
+	// FirejailMissing is true when firejail is not installed: Try and Build are disabled.
+	FirejailMissing bool
+	// OnBuildsChanged is called, on the UI thread, after a Build or an Uninstall changed
+	// the saved builds, so the list can show its marks again.
+	OnBuildsChanged func()
+	// OnUninstalled is called, on the UI thread, after an Uninstall removed the build from
+	// Jailcat: the editor has nothing left to edit.
+	OnUninstalled func()
 }
 
 // EditorPage is the build editor of SPEC §6: the header, the profile selector, the row
@@ -71,6 +81,38 @@ type editorPageState struct {
 	// the last profile could not be read.
 	reading bool
 	failure string
+
+	// busy says which of the buttons is working; busyNone when none is.
+	busy busyKind
+	// actionFailure is the message for the user when the last Preview, Try, Build or
+	// Uninstall could not be done.
+	actionFailure string
+	// outcome is the banner of the last Build or Uninstall; nil for none.
+	outcome *pageOutcome
+	// try runs the Try; tryScroll is the controller of its output and tryAtEnd says that
+	// the output was at its end before the last line came, so it follows.
+	try       *TryController
+	tryScroll *m.ScrollControllerBase
+	tryAtEnd  bool
+	binding   *m.WidgetsBinding
+}
+
+func (s *editorPageState) InitState() {
+	w := s.Widget()
+	s.binding = m.WidgetsBindingOf(s.Context())
+	s.try = w.o.Try
+	if s.try == nil {
+		s.try = NewTryController(w.backend, w.logger)
+	}
+	s.tryScroll = m.NewScrollController()
+	s.tryAtEnd = true
+	s.try.Bind(s, s.tryChanged)
+}
+
+func (s *editorPageState) Dispose() {
+	s.try.Unbind(s)
+	s.try.Release(s.Widget().editor)
+	s.tryScroll.Dispose()
 }
 
 func (s *editorPageState) editor() *Editor { return s.Widget().editor }
@@ -195,10 +237,19 @@ func (s *editorPageState) Build(bc m.BuildContext) m.Widget {
 		bar,
 		m.NewExpanded(tabBody(bc, e, s.tab, act)),
 	}
+	if s.outcome != nil {
+		children = append(children, s.outcomeBanner(bc))
+	}
+	if s.actionFailure != "" {
+		children = append(children, notice(bc, s.actionFailure))
+	}
+	if panel := s.tryPanel(); panel != nil {
+		children = append(children, panel)
+	}
 	if probs := s.problems(bc); probs != nil {
 		children = append(children, probs)
 	}
-	children = append(children, m.NewDivider(m.DividerOpts{Height: m.Some(1.0)}), s.buttons(bc))
+	children = append(children, m.NewDivider(m.DividerOpts{Height: m.Some(1.0)}), s.progress(bc), s.buttons(bc))
 	return m.NewColumn(children, m.ColumnOpts{CrossAxisAlignment: m.CrossAxisAlignmentStretch})
 }
 
@@ -235,6 +286,15 @@ func (s *editorPageState) header(bc m.BuildContext) m.Widget {
 			m.NewSizedBox(m.NewCircularProgressIndicator(), m.SizedBoxOpts{Width: m.Some(18.0), Height: m.Some(18.0)}),
 			m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(8.0)}),
 			m.NewText(readingProfileText, m.TextOpts{Style: theme.TextTheme.BodySmall}))
+	}
+
+	if e.FirejailUpdated() {
+		profileRow = append(profileRow, m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(12.0)}),
+			badge(bc, firejailUpdatedText, scheme.TertiaryContainer(), scheme.OnTertiaryContainer()))
+	}
+	if e.BaseMissing() {
+		profileRow = append(profileRow, m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(12.0)}),
+			badge(bc, baseMissingText, scheme.ErrorContainer(), scheme.OnErrorContainer()))
 	}
 
 	col := []m.Widget{
@@ -290,31 +350,4 @@ func (s *editorPageState) problems(bc m.BuildContext) m.Widget {
 		}))
 	}
 	return m.NewPadding(m.NewEdgeInsetsSymmetric(8, 16), m.NewColumn(rows, m.ColumnOpts{CrossAxisAlignment: m.CrossAxisAlignmentStretch}))
-}
-
-// The buttons of the bar. They are drawn disabled until step 4.7 gives them work.
-const (
-	uninstallText = "Uninstall"
-	previewText   = "Preview"
-	tryText       = "Try"
-	buildText     = "Build"
-)
-
-// buttons is the bar at the bottom: Uninstall (for an installed build) on the left,
-// Preview, Try and Build on the right.
-func (s *editorPageState) buttons(bc m.BuildContext) m.Widget {
-	// TODO(step 4.7): give the buttons their work; a nil callback draws them disabled.
-	var left m.Widget = m.NewSizedBox(nil, m.SizedBoxOpts{})
-	if s.editor().Build().Installed {
-		left = m.NewOutlinedButton(nil, m.NewText(uninstallText))
-	}
-	return m.NewPadding(m.NewEdgeInsetsSymmetric(12, 16), m.NewRow([]m.Widget{
-		left,
-		m.NewSpacer(),
-		m.NewOutlinedButton(nil, m.NewText(previewText)),
-		m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(8.0)}),
-		m.NewOutlinedButton(nil, m.NewText(tryText)),
-		m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(8.0)}),
-		m.NewFilledButton(nil, m.NewText(buildText)),
-	}))
 }

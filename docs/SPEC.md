@@ -428,7 +428,7 @@ One SQLite file (§3.1), opened in `cmd/jailcat`, used only through `internal/st
 Opening a build computes base values from the base profile as it is now, then applies the stored overrides. Build regenerates every file from the database (§11.3).
 
 ### §13.2 Uninstall
-Removes every recorded file of the build whose SHA-256 still matches; a file that was edited since is listed and left in place unless the user confirms. The private home folder is removed only if the user ticks "Also delete its private home" (off by default). Then the build is removed from the database, or kept as "not installed" if the user chooses **Keep settings**.
+Removes every recorded file of the build whose SHA-256 still matches; a file that was edited since is listed and left in place unless the user confirms. The private home folder is removed only if the user ticks "Also delete its private home" (off by default). Then the build is removed from the database, or kept as "not installed" if the user chooses **Keep settings**; a build kept that way shows in the list as a draft (§5), not as built.
 
 ### §13.3 Firejail updates
 A build includes its base profile by path, so firejail's fixes reach the sandbox at its next start without a rebuild. If the base profile file is gone, the build is marked "base profile missing" and its editor asks for another one. When the firejail version differs from the build's `FirejailVersion`, the build list shows "firejail updated" and Extra rules are checked again.

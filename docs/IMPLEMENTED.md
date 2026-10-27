@@ -283,3 +283,21 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   VS Code's Extra rules with a warning on row 1 (`net none` belongs to the Network tab) and an error on row 3, and the first base-profile group open with a conditional line; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** the widget tests use the Go Mono font from `golang.org/x/image` (already in the module graph through Glutter; CLAUDE.md updated) so goldens are the same on every machine. Rows are checked on every keystroke with a sequence number instead of a debounce. Long rows wrap and their numbers drift (Glutter's text field always wraps). Step 4.7 must re-check Extra rules before Build when `ExtraRulesChecked()` is false. SPEC §7.8 updated for renames.
+
+## 4.7 Preview, Try, Build and Uninstall
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.7-preview-try-build
+- **Summary:** The editor's four buttons work (SPEC §11, §13). Preview shows the profile, launcher and desktop entry with the lines from settings, ignores and Extra rules highlighted. Try runs the sandbox from a temporary profile in a panel with streamed output and Stop, one at a time, stopped on app switch, editor close and window close. Build generates, checks conflicts (a dialog to overwrite what may be overwritten, or choose another name), stores a new build first so every header carries its real ID, installs, removes a renamed build's old files, records the files and runs the check, showing the result in a banner. Uninstall removes recorded files, can keep the settings and delete the private home, and asks about edited files. Rows and the editor show "firejail updated" and "base profile missing".
+- **Main files:** `internal/ui/build_types.go`, `localbackend_build.go`, `editor_build.go`, `trycontroller.go`, `trypanel.go`, `previewdialog.go`, `conflictsdialog.go`, `uninstalldialog.go`, `buildflow.go`, `editorpage_actions.go`, `buildoutcome.go`, `marks.go`, their tests, `firejail_test.go`; `docs/SPEC.md` §13.2.
+- **Tests:** widget tests for every flow with a fake backend (buttons, Preview, every conflict kind, check warnings, Try streaming and stopping, Uninstall with Force and Leave, the marks); `LocalBackend` tests with a fake firejail (real build IDs in headers, rebuild, rename, conflicts, failed first build leaves no row, uninstall cases, Try with a private home); route tests through the new methods; goldens `preview-dialog`, `conflicts-dialog`, `editor-built` (14 existing goldens changed only in the enabled button bar, checked by the worker with a pixel diff and by the manager by eye).
+- **Checks:** gofmt ✅ · go vet ✅ (with and without the tag) · golangci-lint ✅ (with and without the tag) · go test -race ✅ · firejail tests ✅ (all of `internal/firejail`, `internal/install` and `internal/ui`, run by the manager outside Claude Code's sandbox: a build through `LocalBackend` hides the chosen folder and leaves only `lo`, Try and Stop work) · display tests none
+- **Proof:**
+  ![4.7 Preview](implemented-proof-images/4.7-preview.png)
+  The Preview of a VS Code build: `net none` highlighted as a setting, the `ignore` lines as undone base lines, the Extra rule marked; viewed by the manager.
+  ![4.7 Conflicts](implemented-proof-images/4.7-conflict.png)
+  "Some files are in the way": an edited launcher that may be overwritten and a foreign menu entry that won't be; viewed by the manager.
+  ![4.7 Built](implemented-proof-images/4.7-built.png)
+  The real app on a scratch home after a real `LocalBackend` build of Calculator (with a fake firejail in the scratch home): Calculator shows "built"; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** a new build's Preview shows `jailcat-build: 0` until it is stored; Build regenerates with the real ID. Only installed builds count as "built"; one uninstalled with its settings kept shows "draft" (SPEC §13.2 updated). Build and Uninstall finish even if the page goes away. A failed first Build deletes its new row; partly written files then show as overwritable Jailcat files.

@@ -120,20 +120,10 @@ func TestEditorOpensForANewApp(t *testing.T) {
 	if !p.ts.Exists(gluttertest.ByText("firejail-calculator")) || !p.ts.Exists(gluttertest.ByType[*AppIcon]()) {
 		t.Error("the header is incomplete")
 	}
-	// The button bar: Preview, Try and Build, disabled; no Uninstall for a build that is not installed.
-	for _, kind := range []gluttertest.Finder{gluttertest.ByType[*m.FilledButton](), gluttertest.ByType[*m.OutlinedButton]()} {
-		for _, w := range p.ts.Widgets(gluttertest.Descendant(gluttertest.ByType[*EditorPage](), kind)) {
-			switch b := w.(type) {
-			case *m.FilledButton:
-				if b.OnPressed() != nil {
-					t.Error("the Build button is enabled")
-				}
-			case *m.OutlinedButton:
-				// The profile selector is the one button that works.
-				if b.OnPressed() != nil && b.Key() != m.NewValueKey("profile-selector") {
-					t.Error("a button of the bar is enabled")
-				}
-			}
+	// The button bar: Preview, Try and Build work; no Uninstall for a build that is not installed.
+	for _, k := range []string{"button:preview", "button:try", "button:build"} {
+		if !p.pressable(k) {
+			t.Errorf("%s does not work", k)
 		}
 	}
 	if p.ts.Exists(gluttertest.ByText(uninstallText)) {

@@ -24,6 +24,12 @@ type AppListOpts struct {
 	// Drafts counts the builds that were never built ([DraftCounts]); an app that has
 	// only those shows a "draft" chip.
 	Drafts map[string]int
+	// Updated holds the [AppKey] of the apps with a build made with another firejail
+	// version than the installed one (SPEC §13.3): the row shows "firejail updated".
+	Updated map[string]bool
+	// BaseGone holds the [AppKey] of the apps with a build whose base profile file is
+	// gone (SPEC §13.3): the row shows "base profile missing".
+	BaseGone map[string]bool
 	// Revision changes whenever Apps or Builds do, so the list knows to filter again.
 	Revision int
 	// Loading shows a progress indicator: the apps are being scanned.
@@ -199,6 +205,8 @@ func (s *appListState) body(bc m.BuildContext) m.Widget {
 				Selected: key == w.o.Selected,
 				Builds:   w.o.Builds[key],
 				Drafts:   w.o.Drafts[key],
+				Updated:  w.o.Updated[key],
+				BaseGone: w.o.BaseGone[key],
 				OnTap: func() {
 					if w.o.OnSelect != nil {
 						w.o.OnSelect(app)

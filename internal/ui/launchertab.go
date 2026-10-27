@@ -147,6 +147,10 @@ type launcherTabState struct {
 	m.StateOf[*LauncherTab]
 	scroll                    *m.ScrollControllerBase
 	nameCtl, menuCtl, commCtl *m.TextEditingController
+	// nameFocus is the focus of the sandbox name field; autofocusName says the field takes
+	// the focus when it first shows, because the user was sent here to choose another name.
+	nameFocus     *m.FocusNode
+	autofocusName bool
 	// nameProblem is why the typed sandbox name is not stored; "" for none.
 	nameProblem string
 	// namePending is true from the moment a well-formed name is typed until the backend
@@ -163,10 +167,13 @@ func (s *launcherTabState) InitState() {
 	s.nameCtl.SetText(final.SandboxName)
 	s.menuCtl.SetText(final.MenuName)
 	s.commCtl.SetText(final.Comment)
+	s.nameFocus = m.NewFocusNode()
+	s.autofocusName = s.Widget().editor.TakeNameFocus()
 	s.refreshPreview()
 }
 
 func (s *launcherTabState) Dispose() {
+	s.nameFocus.Dispose()
 	s.scroll.Dispose()
 	s.nameCtl.Dispose()
 	s.menuCtl.Dispose()
@@ -177,6 +184,9 @@ func (s *launcherTabState) Dispose() {
 // changed them (Reset to profile, a draft), and makes the preview again when it changed.
 // A sandbox name that is being checked or was refused stays in its field.
 func (s *launcherTabState) DidUpdateWidget(*LauncherTab) {
+	if s.Widget().editor.TakeNameFocus() {
+		s.nameFocus.RequestFocus()
+	}
 	final := s.Widget().editor.Final()
 	if !s.namePending && s.nameProblem == "" && s.nameCtl.Text() != final.SandboxName {
 		s.nameCtl.SetText(final.SandboxName)
@@ -300,6 +310,16 @@ func textField(key, label string, ctl *m.TextEditingController, onChanged func(t
 	return m.NewTextField(m.TextFieldOpts{Key: m.NewValueKey(key), Controller: ctl, Decoration: &d, OnChanged: onChanged})
 }
 
+// nameField is the field of the sandbox name, which takes the focus when the user was sent
+// here to choose another name.
+func (s *launcherTabState) nameField() m.Widget {
+	d := m.NewInputDecoration(m.InputDecorationOpts{LabelText: m.Some(sandboxNameLabel), Border: m.NewOutlineInputBorder(), IsDense: m.Some(true)})
+	return m.NewTextField(m.TextFieldOpts{
+		Key: m.NewValueKey("sandbox:field"), Controller: s.nameCtl, Decoration: &d, OnChanged: s.nameTyped,
+		FocusNode: s.nameFocus, Autofocus: s.autofocusName,
+	})
+}
+
 // fieldRow puts a field and the mark of its setting side by side.
 func fieldRow(field m.Widget, mark m.Widget) m.Widget {
 	row := []m.Widget{m.NewSizedBox(field, m.SizedBoxOpts{Width: m.Some(launcherFieldWidth)})}
@@ -313,7 +333,7 @@ func fieldRow(field m.Widget, mark m.Widget) m.Widget {
 // notes about a private home that follows it and a rename of an installed build.
 func (s *launcherTabState) nameSection(bc m.BuildContext, e *Editor, final firejail.Settings) []m.Widget {
 	out := []m.Widget{
-		fieldRow(textField("sandbox:field", sandboxNameLabel, s.nameCtl, s.nameTyped), nil),
+		fieldRow(s.nameField(), nil),
 		m.NewPadding(m.NewEdgeInsetsSymmetric(0, 8), mutedText(bc, sandboxNameHelp)),
 	}
 	if s.nameProblem != "" {

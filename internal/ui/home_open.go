@@ -45,8 +45,11 @@ func (s *homeState) selectApp(app apps.App) {
 			}
 		}
 		all, listErr := backend.ListBuilds(ctx)
+		var missing map[string]bool
 		if listErr != nil {
 			logger.Error("reading the builds failed", "err", listErr)
+		} else {
+			missing = missingBaseApps(ctx, backend, all)
 		}
 		builds, err := backend.BuildsForApp(openCtx, app)
 		if openCtx.Err() != nil || ctx.Err() != nil {
@@ -57,7 +60,7 @@ func (s *homeState) selectApp(app apps.App) {
 		}
 		s.SetState(func() {
 			if listErr == nil {
-				s.builds, s.drafts = BuildCounts(all), DraftCounts(all)
+				s.setBuilds(all, missing)
 				s.revision++
 			}
 			if saveErr != nil {

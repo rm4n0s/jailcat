@@ -119,6 +119,11 @@ type Editor struct {
 	fromDraft bool
 	// notice is a message about opening the build, in plain words.
 	notice string
+	// firejailUpdated and baseMissing are the marks of SPEC §13.3; focusName is the
+	// request of "Choose another sandbox name".
+	firejailUpdated bool
+	baseMissing     bool
+	focusName       bool
 }
 
 // NewEditor creates the editor of a new build, or of the stored build in o.Build.
@@ -358,6 +363,7 @@ func (e *Editor) Problems() []firejail.Problem {
 func (e *Editor) SwitchProfile(path string, base firejail.Base, profile *firejail.Profile, keep bool) {
 	old := e.overrides
 	e.baseProfile, e.base, e.profile = path, base, profile
+	e.baseMissing = false
 	e.extraDone = false // the rows are checked against the base
 	e.baseline = e.makeBaseline(base)
 	if keep {

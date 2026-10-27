@@ -7,6 +7,7 @@ import (
 	"github.com/rm4n0s/jailcat/internal/apps"
 	"github.com/rm4n0s/jailcat/internal/firejail"
 	"github.com/rm4n0s/jailcat/internal/icons"
+	"github.com/rm4n0s/jailcat/internal/install"
 	"github.com/rm4n0s/jailcat/internal/store"
 )
 
@@ -71,6 +72,28 @@ type Backend interface {
 	PreviewIcon(ctx context.Context, app apps.App, s firejail.Settings) (svg []byte, fallbackReason string, err error)
 	// CheckExtraRules checks the rows of the Extra rules tab against the base (SPEC §7.9).
 	CheckExtraRules(ctx context.Context, rows []string, base firejail.Base) []firejail.Problem
+
+	// PrepareBuild generates the profile and the files of the build the request describes
+	// and checks their targets (SPEC §9.5), without writing anything: it feeds Preview and
+	// the conflicts dialog. A firejail that is not installed is an error with the tag
+	// [firejail.TagFirejailNotFound].
+	PrepareBuild(ctx context.Context, req BuildRequest) (*PreparedBuild, error)
+	// Build installs a prepared build (SPEC §11.3): it stores the build when it is new,
+	// writes the files, removes the files of an old name, records the build and the files,
+	// and runs the check. allowOverwrite names the conflicting targets the user agreed to
+	// overwrite. A failed check does not undo the install; see [BuildResult].
+	Build(ctx context.Context, prepared *PreparedBuild, allowOverwrite map[string]bool) (BuildResult, error)
+	// Try runs the build in a sandbox without installing it (SPEC §11.2). The session
+	// ends when it is stopped, when the program ends, or when ctx is cancelled.
+	Try(ctx context.Context, req BuildRequest) (TrySession, error)
+	// Uninstall removes the recorded files of the build and, by choice, its private home
+	// and its place in the database (SPEC §13.2).
+	Uninstall(ctx context.Context, build store.Build, choice UninstallChoice) (install.UninstallResult, error)
+	// InstalledFiles returns the files recorded for the build.
+	InstalledFiles(ctx context.Context, buildID int64) ([]store.InstalledFile, error)
+	// BaseProfileMissing reports whether the base profile file at path is gone (SPEC
+	// §13.3). The path "" (base None) is never missing.
+	BaseProfileMissing(ctx context.Context, path string) bool
 }
 
 // FirejailInfo says which firejail Jailcat found.
@@ -101,25 +124,29 @@ func BuildKey(b store.Build) string {
 	return store.AppKindDesktop + ":" + b.DesktopFileID
 }
 
-// BuildCounts counts the builds of each app that were built, by [AppKey]. A build that
-// was never built is a draft, see [DraftCounts].
+// isBuilt reports whether the build is installed now: it was built and not uninstalled
+// since (SPEC §13.2).
+func isBuilt(b store.Build) bool { return b.BuiltAt != nil && b.Installed }
+
+// BuildCounts counts the builds of each app that are built, by [AppKey]. A build that was
+// never built, or was uninstalled with its settings kept, is a draft, see [DraftCounts].
 func BuildCounts(builds []store.Build) map[string]int {
 	counts := map[string]int{}
 	for _, b := range builds {
-		if b.BuiltAt != nil {
+		if isBuilt(b) {
 			counts[BuildKey(b)]++
 		}
 	}
 	return counts
 }
 
-// DraftCounts counts the builds of each app that were never built (SPEC §5): they hold
-// the editor's state of an app the user started on but did not build, and the app list
-// marks them "draft".
+// DraftCounts counts the builds of each app that are not installed (SPEC §5, §13.2): they
+// hold the editor's state of an app the user started on but did not build, or built and
+// uninstalled with its settings kept, and the app list marks them "draft".
 func DraftCounts(builds []store.Build) map[string]int {
 	counts := map[string]int{}
 	for _, b := range builds {
-		if b.BuiltAt == nil {
+		if !isBuilt(b) {
 			counts[BuildKey(b)]++
 		}
 	}

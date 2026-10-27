@@ -568,15 +568,17 @@ func TestDraftPlanRun(t *testing.T) {
 func TestBuildAndDraftCounts(t *testing.T) {
 	built := fixtureBackend(t).builds[0].BuiltAt
 	builds := []store.Build{
-		{AppKind: store.AppKindDesktop, DesktopFileID: "a.desktop", BuiltAt: built},
-		{AppKind: store.AppKindDesktop, DesktopFileID: "a.desktop", BuiltAt: built},
+		{AppKind: store.AppKindDesktop, DesktopFileID: "a.desktop", BuiltAt: built, Installed: true},
+		{AppKind: store.AppKindDesktop, DesktopFileID: "a.desktop", BuiltAt: built, Installed: true},
 		{AppKind: store.AppKindDesktop, DesktopFileID: "a.desktop"},
+		// Built and uninstalled with its settings kept: not installed any more.
+		{AppKind: store.AppKindDesktop, DesktopFileID: "a.desktop", BuiltAt: built},
 		{AppKind: store.AppKindBinary, BinaryPath: "/bin/b"},
 	}
 	if got := BuildCounts(builds); len(got) != 1 || got["desktop:a.desktop"] != 2 {
 		t.Errorf("BuildCounts = %v", got)
 	}
-	if got := DraftCounts(builds); len(got) != 2 || got["desktop:a.desktop"] != 1 || got["binary:/bin/b"] != 1 {
+	if got := DraftCounts(builds); len(got) != 2 || got["desktop:a.desktop"] != 2 || got["binary:/bin/b"] != 1 {
 		t.Errorf("DraftCounts = %v", got)
 	}
 }

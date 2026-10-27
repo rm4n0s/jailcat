@@ -34,11 +34,13 @@ func OpenEditor(ctx context.Context, backend Backend, logger *slog.Logger, app a
 	}
 
 	var notice string
+	baseMissing := false
 	base, profile, err := backend.ReadBase(ctx, opts.BaseProfile)
 	if err != nil {
 		if ctx.Err() != nil {
 			return nil, err
 		}
+		baseMissing = build != nil && backend.BaseProfileMissing(ctx, opts.BaseProfile)
 		logger.Error("reading the base profile failed", "profile", opts.BaseProfile, "err", err)
 		notice = openReadFailedText(choices.LabelFor(opts.BaseProfile), err)
 		opts.BaseProfile = ""
@@ -47,6 +49,14 @@ func OpenEditor(ctx context.Context, backend Backend, logger *slog.Logger, app a
 	opts.Base, opts.Profile = base, profile
 	e := NewEditor(app, opts)
 	e.SetNotice(notice)
+	e.SetBaseMissing(baseMissing)
+	if build != nil && build.Installed {
+		// A firejail that does not answer is not a reason not to open the build; the
+		// list and the Build button say what is wrong with it.
+		if info, err := backend.Firejail(ctx); err == nil {
+			e.SetFirejailUpdated(firejailUpdatedFor(build.FirejailVersion, info.Version))
+		}
+	}
 	return e, nil
 }
 

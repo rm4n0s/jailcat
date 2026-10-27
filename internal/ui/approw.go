@@ -20,6 +20,12 @@ type AppRowOpts struct {
 	// Drafts is the number of builds of the app that were never built. An app with no
 	// built build and a draft shows a "draft" chip.
 	Drafts int
+	// Updated shows the "firejail updated" chip: a build of the app was made with another
+	// firejail version than the installed one (SPEC §13.3).
+	Updated bool
+	// BaseGone shows the "base profile missing" chip: a build's base profile file is gone
+	// (SPEC §13.3).
+	BaseGone bool
 	// OnTap is called when the row is tapped. It is not called for an app that is
 	// already sandboxed.
 	OnTap func()
@@ -53,15 +59,30 @@ func (w *AppRow) Build(bc m.BuildContext) m.Widget {
 	scheme := theme.ColorScheme
 	app := w.app
 
-	var badges []m.Widget
+	var specs []badgeSpec
 	switch {
 	case w.o.Builds > 0:
-		badges = append(badges, badge(bc, builtLabel(w.o.Builds), scheme.Primary(), scheme.OnPrimary()))
+		specs = append(specs, badgeSpec{builtLabel(w.o.Builds), scheme.Primary(), scheme.OnPrimary()})
 	case w.o.Drafts > 0:
-		badges = append(badges, badge(bc, draftLabel, scheme.SecondaryContainer(), scheme.OnSecondaryContainer()))
+		specs = append(specs, badgeSpec{draftLabel, scheme.SecondaryContainer(), scheme.OnSecondaryContainer()})
 	}
 	if app.UsesFirejail {
-		badges = append(badges, badge(bc, "uses firejail", scheme.TertiaryContainer(), scheme.OnTertiaryContainer()))
+		specs = append(specs, badgeSpec{"uses firejail", scheme.TertiaryContainer(), scheme.OnTertiaryContainer()})
+	}
+	if w.o.Updated {
+		specs = append(specs, badgeSpec{firejailUpdatedText, scheme.TertiaryContainer(), scheme.OnTertiaryContainer()})
+	}
+	if w.o.BaseGone {
+		specs = append(specs, badgeSpec{baseMissingText, scheme.ErrorContainer(), scheme.OnErrorContainer()})
+	}
+	// The row has a fixed height: three chips or more are drawn thinner to fit.
+	var badges []m.Widget
+	for _, b := range specs {
+		if len(specs) > 2 {
+			badges = append(badges, denseBadge(bc, b.text, b.background, b.foreground))
+		} else {
+			badges = append(badges, badge(bc, b.text, b.background, b.foreground))
+		}
 	}
 	var trailing m.Widget
 	if len(badges) > 0 {
@@ -125,6 +146,24 @@ func badge(bc m.BuildContext, text string, background, foreground m.Color) m.Wid
 	style := m.ThemeOf(bc).TextTheme.LabelSmall.CopyWith(m.TextStyleCopy{Color: m.Some(foreground)})
 	return m.NewContainer(m.NewText(text, m.TextOpts{Style: style, MaxLines: m.Some(1)}), m.ContainerOpts{
 		Padding: m.NewEdgeInsetsSymmetric(2, 8),
+		Decoration: m.NewBoxDecoration(m.BoxDecorationOpts{
+			Color:        m.Some(background),
+			BorderRadius: m.NewBorderRadiusCircular(8),
+		}),
+	})
+}
+
+// badgeSpec is the text and colors of a chip before it is drawn.
+type badgeSpec struct {
+	text                   string
+	background, foreground m.Color
+}
+
+// denseBadge is a [badge] without the space above and below its text.
+func denseBadge(bc m.BuildContext, text string, background, foreground m.Color) m.Widget {
+	style := m.ThemeOf(bc).TextTheme.LabelSmall.CopyWith(m.TextStyleCopy{Color: m.Some(foreground)})
+	return m.NewContainer(m.NewText(text, m.TextOpts{Style: style, MaxLines: m.Some(1)}), m.ContainerOpts{
+		Padding: m.NewEdgeInsetsSymmetric(0, 8),
 		Decoration: m.NewBoxDecoration(m.BoxDecorationOpts{
 			Color:        m.Some(background),
 			BorderRadius: m.NewBorderRadiusCircular(8),

@@ -64,6 +64,10 @@ type homeState struct {
 	builds   map[string]int
 	drafts   map[string]int
 	revision int
+	// allBuilds are the builds the counts were made from; missingBase holds the apps with a
+	// build whose base profile is gone (SPEC §13.3).
+	allBuilds   []store.Build
+	missingBase map[string]bool
 	// loading is true while a scan runs; scanErr and buildsErr are the messages for the
 	// user when the last scan or the read of the builds failed.
 	loading   bool
@@ -101,36 +105,53 @@ type homeState struct {
 	lifecycle   *m.AppLifecycleListener
 	exiting     bool
 	closeAnyway bool
+	// try runs the Try of the window.
+	try *TryController
 }
 
 func (s *homeState) InitState() {
+	s.try = NewTryController(s.Widget().backend, s.Widget().logger)
 	s.binding = m.WidgetsBindingOf(s.Context())
 	s.lifecycle = m.NewAppLifecycleListener(s.binding, m.AppLifecycleListenerOpts{OnExitRequested: s.onExitRequested})
 	s.startScan()
 	s.startFirejail()
 }
 
-func (s *homeState) Dispose() { s.lifecycle.Dispose() }
+func (s *homeState) Dispose() {
+	s.lifecycle.Dispose()
+	s.try.Stop()
+}
 
 // onExitRequested is the close button of the window. Unsaved changes of the editor are
 // kept as a draft first, off the UI thread, so the request is answered with Cancel and
 // the app exits itself when the draft is written (SPEC §5). If the draft cannot be
 // written the window stays open with a message, and a second close request closes it.
 func (s *homeState) onExitRequested() gui.AppExitResponse {
-	if s.closeAnyway || s.editor == nil {
+	if s.closeAnyway {
 		return gui.AppExitResponseExit
 	}
-	plan := s.editor.DraftPlan()
-	if plan.Action == DraftNothing {
+	var plan DraftPlan
+	if s.editor != nil {
+		plan = s.editor.DraftPlan()
+	}
+	trying := s.try.Active()
+	if plan.Action == DraftNothing && !trying {
 		return gui.AppExitResponseExit
 	}
 	if s.exiting {
 		return gui.AppExitResponseCancel
 	}
 	s.exiting = true
-	backend, logger := s.Widget().backend, s.Widget().logger
+	backend, logger, try := s.Widget().backend, s.Widget().logger, s.try
 	s.Go(func(ctx context.Context) {
-		err := plan.Run(context.WithoutCancel(ctx), backend)
+		// A sandbox that is left running belongs to nobody once Jailcat is gone.
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), tryGrace)
+		try.StopWait(stopCtx)
+		cancel()
+		var err error
+		if plan.Action != DraftNothing {
+			err = plan.Run(context.WithoutCancel(ctx), backend)
+		}
 		if err != nil {
 			logger.Error("keeping the draft before closing failed", "err", err)
 		}
@@ -163,8 +184,12 @@ func (s *homeState) startScan() {
 		res, scanErr := backend.ScanApps(ctx)
 		var builds []store.Build
 		var buildsErr error
+		var missing map[string]bool
 		if scanErr == nil {
 			builds, buildsErr = backend.ListBuilds(ctx)
+			if buildsErr == nil {
+				missing = missingBaseApps(ctx, backend, builds)
+			}
 		}
 		if ctx.Err() != nil {
 			// Replaced by a newer scan, or the window is closing.
@@ -185,7 +210,7 @@ func (s *homeState) startScan() {
 			if scanErr != nil {
 				s.scanErr = scanFailedText
 			} else {
-				s.setApps(res.Apps, builds)
+				s.setApps(res.Apps, builds, missing)
 			}
 			if buildsErr != nil {
 				s.buildsErr = buildsFailedText
@@ -196,9 +221,9 @@ func (s *homeState) startScan() {
 }
 
 // setApps stores the result of a scan and keeps the selection if the app is still there.
-func (s *homeState) setApps(found []apps.App, builds []store.Build) {
+func (s *homeState) setApps(found []apps.App, builds []store.Build, missing map[string]bool) {
 	s.apps = found
-	s.builds, s.drafts = BuildCounts(builds), DraftCounts(builds)
+	s.setBuilds(builds, missing)
 	if s.selected == nil {
 		return
 	}
@@ -215,6 +240,43 @@ func (s *homeState) setApps(found []apps.App, builds []store.Build) {
 		s.editor, s.opening, s.openErr = nil, false, ""
 		s.openGen++
 	}
+}
+
+// setBuilds stores the builds the list marks come from.
+func (s *homeState) setBuilds(builds []store.Build, missing map[string]bool) {
+	s.allBuilds, s.missingBase = builds, missing
+	s.builds, s.drafts = BuildCounts(builds), DraftCounts(builds)
+}
+
+// refreshBuilds reads the saved builds again, off the UI thread, so the list shows the
+// effect of a Build or an Uninstall. It runs on the UI thread.
+func (s *homeState) refreshBuilds() {
+	backend, logger := s.Widget().backend, s.Widget().logger
+	s.Go(func(ctx context.Context) {
+		all, err := backend.ListBuilds(ctx)
+		if err != nil {
+			if ctx.Err() == nil {
+				logger.Error("reading the builds failed", "err", err)
+			}
+			return
+		}
+		missing := missingBaseApps(ctx, backend, all)
+		if ctx.Err() != nil {
+			return
+		}
+		s.SetState(func() {
+			s.setBuilds(all, missing)
+			s.revision++
+		})
+	})
+}
+
+// uninstalled is called when the open build was removed from Jailcat: its editor goes.
+func (s *homeState) uninstalled() {
+	s.SetState(func() {
+		s.selected, s.editor, s.opening, s.openErr = nil, nil, false, ""
+		s.openGen++
+	})
 }
 
 // startFirejail looks for firejail off the UI thread.
@@ -255,6 +317,8 @@ func (s *homeState) Build(bc m.BuildContext) m.Widget {
 	list := NewAppList(s.Widget().backend, s.apps, AppListOpts{
 		Builds:   s.builds,
 		Drafts:   s.drafts,
+		Updated:  s.updatedApps(),
+		BaseGone: s.missingBase,
 		Revision: s.revision,
 		Loading:  s.loading,
 		Error:    errText,
@@ -298,8 +362,12 @@ func (s *homeState) rightPane(bc m.BuildContext) m.Widget {
 		}, m.ColumnOpts{MainAxisSize: m.MainAxisSizeMin}))
 	case s.editor != nil:
 		editorPage := NewEditorPage(s.Widget().backend, s.Widget().logger, s.editor, EditorPageOpts{
-			Key:            m.NewValueKey(s.editor),
-			OnDiscardDraft: s.discardDraft,
+			Key:             m.NewValueKey(s.editor),
+			OnDiscardDraft:  s.discardDraft,
+			Try:             s.try,
+			FirejailMissing: s.known && s.firejail.Missing,
+			OnBuildsChanged: s.refreshBuilds,
+			OnUninstalled:   s.uninstalled,
 		})
 		if s.notice == "" {
 			return editorPage
@@ -310,6 +378,15 @@ func (s *homeState) rightPane(bc m.BuildContext) m.Widget {
 		return m.NewAlign(notice(bc, s.openErr), m.AlignOpts{Alignment: m.AlignmentTopCenter})
 	}
 	return centeredText(bc, openingText)
+}
+
+// updatedApps returns the apps with a build made with another firejail than the one that
+// is installed now (SPEC §13.3); none while the version is not known.
+func (s *homeState) updatedApps() map[string]bool {
+	if !s.known || s.firejail.Missing {
+		return nil
+	}
+	return updatedApps(s.allBuilds, s.firejail.Version)
 }
 
 // firejailBanner is the strip on top of the window when firejail is not installed.

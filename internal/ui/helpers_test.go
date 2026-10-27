@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/rm4n0s/jailcat/internal/apps"
 	"github.com/rm4n0s/jailcat/internal/firejail"
 	"github.com/rm4n0s/jailcat/internal/icons"
+	"github.com/rm4n0s/jailcat/internal/install"
 	"github.com/rm4n0s/jailcat/internal/store"
 )
 
@@ -118,6 +120,34 @@ type fakeBackend struct {
 	previewErr      error
 	// checkAsks lists the rows CheckExtraRules was asked about.
 	checkAsks [][]string
+
+	// The build flows. prepareAsks lists the requests PrepareBuild was asked for;
+	// prepareErr is its error and conflicts and owners its answer.
+	prepareAsks []BuildRequest
+	prepareErr  error
+	conflicts   []install.Conflict
+	owners      map[int64]string
+	// buildAsks lists the paths Build was told to overwrite, one entry per call; buildErr
+	// is its error and buildGate, when not nil, holds it until it is closed. checkResult,
+	// checkErr and iconFallback are what the BuildResult says.
+	buildAsks    []map[string]bool
+	buildErr     error
+	buildGate    chan struct{}
+	checkResult  firejail.CheckResult
+	checkErr     error
+	iconFallback string
+	// tries lists the requests Try was asked for; session is what it returns, tryErr its
+	// error.
+	tries   []BuildRequest
+	session *fakeSession
+	tryErr  error
+	// installedFiles is the answer of InstalledFiles; uninstallAsks lists the choices
+	// Uninstall was called with and uninstallResults are its answers, in order (the last
+	// one repeats); uninstallErr is its error.
+	installedFiles   []store.InstalledFile
+	uninstallAsks    []UninstallChoice
+	uninstallResults []install.UninstallResult
+	uninstallErr     error
 }
 
 // set changes the fields under the lock.
@@ -147,7 +177,9 @@ func (f *fakeBackend) ScanApps(ctx context.Context) (apps.Result, error) {
 func (f *fakeBackend) ListBuilds(context.Context) ([]store.Build, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.builds, f.buildsErr
+	// A copy, as the database gives one: the window keeps the answer while a later call
+	// of the fake changes its own builds.
+	return slices.Clone(f.builds), f.buildsErr
 }
 
 func (f *fakeBackend) LookupIcon(_ context.Context, app apps.App) (icons.Icon, error) {
@@ -247,15 +279,16 @@ func fixtureBackend(t *testing.T) *fakeBackend {
 	built := time.Date(2026, 10, 20, 9, 30, 0, 0, time.UTC)
 	fj := newFixtureFirejail(t)
 	return &fakeBackend{
-		fj:     NewLocalBackend(fj.dirs, nil, "", slog.New(slog.NewTextHandler(io.Discard, nil))),
+		fj:     NewLocalBackend(fullDirs(t, fj.dirs), nil, "", slog.New(slog.NewTextHandler(io.Discard, nil))),
 		result: apps.Result{Apps: all},
 		builds: []store.Build{
-			{ID: 1, SandboxName: "firejail-firefox", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop", BuiltAt: &built},
-			{ID: 2, SandboxName: "firejail-firefox-2", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop", BuiltAt: &built},
-			{ID: 3, SandboxName: "firejail-code", AppKind: store.AppKindDesktop, DesktopFileID: "Visual Studio Code.desktop", BuiltAt: &built},
+			{ID: 1, SandboxName: "firejail-firefox", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop", BuiltAt: &built, Installed: true, FirejailVersion: "0.9.80"},
+			{ID: 2, SandboxName: "firejail-firefox-2", AppKind: store.AppKindDesktop, DesktopFileID: "Firefox.desktop", BuiltAt: &built, Installed: true, FirejailVersion: "0.9.80"},
+			{ID: 3, SandboxName: "firejail-code", AppKind: store.AppKindDesktop, DesktopFileID: "Visual Studio Code.desktop", BuiltAt: &built, Installed: true, FirejailVersion: "0.9.80"},
 		},
-		firejail: FirejailInfo{Path: "/usr/bin/firejail", Version: "0.9.80"},
-		cpus:     8,
+		firejail:    FirejailInfo{Path: "/usr/bin/firejail", Version: "0.9.80"},
+		checkResult: firejail.CheckResult{OK: true},
+		cpus:        8,
 		// Xpra and Xvfb are installed, Xephyr is not.
 		programs: map[string]bool{"xpra": true, "Xvfb": true},
 		icons: map[string]icons.Icon{
