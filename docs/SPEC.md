@@ -353,7 +353,7 @@ A build's icon is always an SVG, at `<icons>/<sandbox name>.svg`, named in the d
 
 ### §10.2 App icon with badge (default)
 - The app's icon is found by the Icon Theme Specification: an absolute `Icon=` path as is; a name in the current theme, its parents, `hicolor`, then `/usr/share/pixmaps`; the largest size, SVG first
-- An SVG source is parsed with `encoding/xml` and inlined as a nested `<svg>` with its `viewBox`. Its `id`s, and every reference to them, get a unique prefix. `<script>`, `<foreignObject>`, `on*` attributes and references outside the file (other than `data:` URIs and `#` ids) are removed
+- An SVG source is parsed with `encoding/xml` and inlined as a nested `<svg>` with its `viewBox`. Its `id`s, and every reference to them, get a unique prefix. elements outside SVG 1.1 drawing (an allowlist: `<script>`, `<foreignObject>`, animation, metadata and foreign namespaces go), `on*` attributes and references outside the file (other than `data:` image URIs and `#` ids) are removed. A `<style>` is kept only in KDE's colour-scheme form, rules `.<class> { <colour or opacity property>: <plain value>; }`, which is applied to the matching elements as attributes (class rules beat presentation attributes and lose to `style=""`); any other `<style>` is dropped whole. A document with an internal DTD subset, over 4 MiB, nested deeper than 128, or a PNG larger than 4096 px is refused and falls back to a random icon
 - A PNG source is embedded as a base64 `data:image/png` URI in an `<image>`
 - The badge from `assets/badge.svg` sits over the bottom-right corner, at 40% of the icon's width
 - Other formats (XPM), a missing icon or a source that cannot be parsed fall back to a random icon, and the Launcher tab says why

@@ -133,3 +133,19 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** C: `internal/firejail/testdata/launchers/special-args.sh`.
 - **Manual checks:** none
 - **Deviations and follow-ups:** `--` is written unquoted, as in SPEC §9.2. Only Jailcat's own 5-second limit counts as a version timeout; a cancelled caller context is `FirejailVersionFailed`.
+
+## 3.1 Building icons (`internal/icons`, writer)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-3.1-building-icons
+- **Summary:** `BadgeIcon` writes a build's 128×128 SVG icon: the app's SVG (parsed, sanitized by an element allowlist, ids prefixed and references rewritten) or PNG (embedded as a data URI) as a nested `<svg>`, with the jail-bar badge at the bottom-right. KDE's colour-scheme `<style>` rules are applied as attributes, so breeze icons keep their colours. `RandomIcon` draws a seeded shape, gradient and initial with the badge. The badge and Jailcat's own icon are hand-written SVGs in `assets/`.
+- **Main files:** `assets/badge.svg`, `assets/jailcat.svg`, `assets/embed.go`; `internal/icons/compose.go`, `sanitize.go`, `cssclass.go`, `svgnode.go`, their tests, `testdata/compose/`.
+- **Tests:** byte-for-byte golden SVGs (simple, ids/gradients/`use`, hostile, PNG, VS Code-like, breeze, size-only, three random), each rendered by `rsvg-convert` without warnings; pixel checks of the colour-scheme rules and their precedence; 26 hostile `<style>` blocks dropped; refused sources (XPM, DTD entities, oversize, deep nesting, fake PNG); determinism; contrast of the random palette; route tests for the 3 tags.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![3.1 badge on the VS Code-like icon](implemented-proof-images/3.1-badge-code.png)
+  A blue rounded square with a white `</>` and the amber jail-bar shield at the bottom-right, viewed by the manager.
+  ![3.1 random icons](implemented-proof-images/3.1-random.png)
+  Three random icons, a blue circle with F, a teal rounded square with C and a purple hexagon with É, each with the badge, viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** every icon starts with an XML declaration and Jailcat's header comment (SPEC §9.5's ownership check needs it). Of the system's icons, no hicolor app SVG uses `<style>`; 27% of breeze's do, all in the colour-scheme form now supported (SPEC §10.2 updated). Qt SVG rendering was not checked; only librsvg was available.
