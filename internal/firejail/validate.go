@@ -60,13 +60,31 @@ const (
 	ProblemCPU = "CPUInvalid"
 	// ProblemNumber is a limit that is negative.
 	ProblemNumber = "NumberNegative"
+	// ProblemChosenNoFolder is the home set to "Only the folders I choose" with no folder
+	// row and no Downloads: firejail would not restrict the home at all.
+	ProblemChosenNoFolder = "ChosenHomeNoFolder"
+	// ProblemDownloadsHome is Downloads read-write with an empty or private home, which
+	// keep the real home (where the Downloads folder is) out of the sandbox.
+	ProblemDownloadsHome = "DownloadsNeedRealHome"
 	// ProblemValue is a value that cannot be written in a profile line (SPEC §9.1): a
 	// newline, a NUL, a "#", a blank at the start or the end, two blanks in a row or a
 	// tab.
 	ProblemValue = "ValueForbidden"
 )
 
-// Problem is one thing wrong with a [Settings], written for the user.
+// Severity says whether a [Problem] blocks Build and Try.
+type Severity string
+
+// The severities of a [Problem].
+const (
+	// SeverityError blocks Build and Try.
+	SeverityError Severity = "error"
+	// SeverityWarning is shown to the user and blocks nothing.
+	SeverityWarning Severity = "warning"
+)
+
+// Problem is one thing wrong with a [Settings] or with the Extra rules, written for the
+// user.
 type Problem struct {
 	// Field is the setting that has the problem; it is empty for a folder row, which
 	// has Path (the Files tab).
@@ -77,6 +95,12 @@ type Problem struct {
 	Message string
 	// Tag is one of the Problem constants.
 	Tag string
+	// Severity is [SeverityError] for every problem of [Validate]; the checks of the
+	// Extra rules ([CheckExtraRules]) also report [SeverityWarning].
+	Severity Severity
+	// Row is the 1-based row of the Extra rules that has the problem, 0 for a problem of
+	// a setting or a folder row.
+	Row int
 }
 
 // validator collects the problems of one [Validate] call.
@@ -86,7 +110,7 @@ type validator struct {
 }
 
 func (v *validator) add(f Field, path, tag, format string, args ...any) {
-	v.out = append(v.out, Problem{Field: f, Path: path, Tag: tag, Message: fmt.Sprintf(format, args...)})
+	v.out = append(v.out, Problem{Field: f, Path: path, Tag: tag, Severity: SeverityError, Message: fmt.Sprintf(format, args...)})
 }
 
 // value checks that a string can be a value of a profile line (SPEC §9.1).
@@ -122,6 +146,14 @@ func (v *validator) files(s Settings) {
 	}
 
 	keepsHomeOut := s.Home == HomeEmpty || s.Home == HomePrivate
+	if s.Home == HomeChosen && len(s.Folders) == 0 && !s.DownloadsReadWrite {
+		v.add(FieldHome, "", ProblemChosenNoFolder,
+			"Add at least one folder to the list. With none, the app would see the whole home, not only the folders you choose.")
+	}
+	if keepsHomeOut && s.DownloadsReadWrite {
+		v.add(FieldDownloadsReadWrite, "", ProblemDownloadsHome,
+			"The Downloads folder is in your home folder, which an empty or private home keeps out of the sandbox. Turn Downloads off, or choose another home.")
+	}
 	seen := map[string]bool{}
 	for _, f := range s.Folders {
 		if seen[f.Path] {
@@ -350,10 +382,10 @@ func (o Overrides) Validate(base Settings) []Problem {
 		}
 		switch {
 		case fo.Removed:
-			out = append(out, Problem{Path: fo.Path, Tag: ProblemFolderLocked,
+			out = append(out, Problem{Path: fo.Path, Tag: ProblemFolderLocked, Severity: SeverityError,
 				Message: fmt.Sprintf("%s is read-only in the profile and cannot be removed.", fo.Path)})
 		case fo.Access != AccessReadOnly:
-			out = append(out, Problem{Path: fo.Path, Tag: ProblemFolderLocked,
+			out = append(out, Problem{Path: fo.Path, Tag: ProblemFolderLocked, Severity: SeverityError,
 				Message: fmt.Sprintf("%s is read-only in the profile and cannot be loosened.", fo.Path)})
 		}
 	}

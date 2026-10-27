@@ -453,3 +453,42 @@ func TestWithName(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateHomeChoiceProblems(t *testing.T) {
+	tests := []struct {
+		name string
+		edit func(s *Settings)
+		want []Problem
+	}{
+		{name: "chosen without a folder", edit: func(s *Settings) { s.Home = HomeChosen },
+			want: []Problem{{Field: FieldHome, Tag: ProblemChosenNoFolder}}},
+		{name: "chosen with Downloads", edit: func(s *Settings) { s.Home = HomeChosen; s.DownloadsReadWrite = true }},
+		{name: "chosen with a folder", edit: func(s *Settings) {
+			s.Home = HomeChosen
+			s.Folders = []Folder{{Path: "${HOME}/a", Access: AccessReadWrite}}
+		}},
+		{name: "empty home with Downloads", edit: func(s *Settings) { s.Home = HomeEmpty; s.DownloadsReadWrite = true },
+			want: []Problem{{Field: FieldDownloadsReadWrite, Tag: ProblemDownloadsHome}}},
+		{name: "private home with Downloads", edit: func(s *Settings) {
+			s.Home = HomePrivate
+			s.PrivateDir = "/home/me/.local/share/jailcat/homes/x"
+			s.DownloadsReadWrite = true
+		}, want: []Problem{{Field: FieldDownloadsReadWrite, Tag: ProblemDownloadsHome}}},
+		{name: "full home with Downloads", edit: func(s *Settings) { s.DownloadsReadWrite = true }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := validSettings()
+			tc.edit(&s)
+			got := Validate(s, "/home/me")
+			if len(got) != len(tc.want) {
+				t.Fatalf("Validate() = %+v, want %d problems", got, len(tc.want))
+			}
+			for i, w := range tc.want {
+				if got[i].Tag != w.Tag || got[i].Field != w.Field || got[i].Severity != SeverityError || got[i].Row != 0 || got[i].Message == "" {
+					t.Errorf("problem %d = %+v, want tag %q field %q as an error", i, got[i], w.Tag, w.Field)
+				}
+			}
+		})
+	}
+}

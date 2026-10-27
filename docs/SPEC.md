@@ -264,9 +264,12 @@ A build writes four files and, for **Own private home**, one folder. Every gener
 quiet
 
 # Settings
-ignore nosound
 net none
+noblacklist ${HOME}/Projects
 read-only ${HOME}/Projects
+
+# Undo base profile lines
+ignore nosound
 
 # Extra rules
 dbus-user.talk org.freedesktop.Notifications
@@ -274,8 +277,10 @@ dbus-user.talk org.freedesktop.Notifications
 # Base profile
 include /etc/firejail/code.profile
 ```
-- `quiet`, when on, is the first command (firejail requires it)
+- `quiet`, when on, is the first command (firejail requires it). When it is off and the base chain has a `quiet`, `ignore quiet` undoes it
 - All Jailcat lines come before the `include`, because `ignore` acts only on lines read after it. With base **None** there is no `include`
+- The order is: header, `quiet`, `# Settings` (the lines of the settings, then the base lines written again, below), `# Undo base profile lines` (every `ignore`), `# Extra rules`, `# Base profile` (the `include`). The settings come before the ignores so that no `ignore` of the profile can skip a line Jailcat wrote; a section with no line is left out. An Extra rule that one of the ignores would skip is also written in the Settings part, so it keeps its effect
+- What the settings are compared with is what firejail would do with only the `include`: the base values of the base profile, and, with **None**, firejail's own defaults. So with **None** Jailcat's security defaults (§7.5) are written as lines
 - The profile is in Jailcat's folder, not in the firejail user config folder: a `code.profile` there would change every `firejail code`, and `firecfg`'s symlinks
 - How each override is written:
 
@@ -284,13 +289,14 @@ include /etc/firejail/code.profile
   | A restriction turned on that the base lacks | the command (`nosound`, `net none`, `seccomp`) |
   | A restriction the base sets turned off | `ignore <the base line>` (`ignore nosound`, `ignore net none`) |
   | A value the base sets changed | `ignore <the base line>`, then the new line (`ignore dbus-user none`, `dbus-user filter`, then the `dbus-user.talk` lines) |
-  | Folder Read-write | Only the folders I choose: `whitelist <path>`; else, if the base hides it: `noblacklist <path>` |
+  | A list the base sets changed (`protocol`, `private-bin`, `private-etc`, `dns`, `cpu`, `env`, the D-Bus names) | firejail merges the lines of a list, so `ignore <line>` for every base line of the field, then the whole new list. The same for a value where firejail keeps the last line (`nice`, `timeout`, `rlimit-*`, `hosts-file`, `x11`) |
+  | Folder Read-write | `noblacklist <path>`, and `whitelist <path>` with Only the folders I choose |
   | Folder Read-only | as Read-write, plus `read-only <path>` |
   | Folder Hidden | `blacklist <path>` |
   | A base folder row removed | `ignore <the base line>`. Rows made from `whitelist-ro` cannot be removed or loosened this way (§8.1): the editor shows them locked, with the reason |
-  | Home: Only the folders I choose | the `whitelist` lines of the folder rows (a whitelist under `${HOME}` hides the rest of the home) |
-  | Home: Empty home | `private` |
-  | Home: Own private home | `private ${HOME}/.local/share/jailcat/homes/<sandbox name>` (the real path, written with `${HOME}` when under the home) |
+  | Home: Only the folders I choose | the `whitelist` lines of the folder rows and of Downloads (a whitelist under `${HOME}` hides the rest of the home). With no folder allowed under the home the build is refused: firejail would not restrict the home at all |
+  | Home: Empty home | `private`. Downloads read-write is refused with an empty or private home: the Downloads folder is in the real home |
+  | Home: Own private home | `private ${HOME}/.local/share/jailcat/homes/<sandbox name>` (the real path, written with `${HOME}` when under the home), `ignore mkdir` and `ignore mkfile`: with a private home the `mkdir` and `mkfile` lines of the base profile would still make folders and files in the real home (`man firejail-profile`, under `private directory`) |
   | Home: Full home, with a base that restricts the home | `ignore` for each `private` and home `whitelist` line of the base |
 
 - How `ignore` lines are written (the matching rule is in §8.1):

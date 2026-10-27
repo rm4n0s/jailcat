@@ -1,0 +1,880 @@
+package firejail
+
+import (
+	"bytes"
+	stdErrors "errors"
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	jerrors "github.com/rm4n0s/errors"
+)
+
+var updateGoldens = flag.Bool("update-goldens", false, "rewrite the golden files of testdata")
+
+// golden compares text with the file testdata/profiles/name, byte for byte.
+func golden(t *testing.T, name, text string) {
+	t.Helper()
+	path := filepath.Join("testdata", "profiles", name)
+	if *updateGoldens {
+		writeFile(t, path, text)
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden: %v (run with -update-goldens to make it)", err)
+	}
+	if string(want) != text {
+		t.Errorf("%s differs from the golden file.\n--- want\n%s--- got\n%s", name, want, text)
+	}
+}
+
+// lineTexts returns the texts of the generated lines.
+func lineTexts(g *Generated) []string {
+	var out []string
+	for _, l := range g.Lines {
+		out = append(out, l.Text)
+	}
+	return out
+}
+
+// indexOf returns the position of the first generated line with the text, or -1.
+func indexOf(g *Generated, text string) int {
+	return slices.IndexFunc(g.Lines, func(l GeneratedLine) bool { return l.Text == text })
+}
+
+// goldenSpec is spec with the include shown as /etc/firejail, and a fake home, so the
+// golden files do not depend on the machine.
+func goldenSpec(t *testing.T, base string, edit func(s *Settings), extras ...string) ProfileSpec {
+	t.Helper()
+	e := newWriterEnv(t, testHome)
+	spec := e.spec(base, edit, extras...)
+	if base != "" {
+		spec.BaseProfile = "/etc/firejail/" + base
+	}
+	return spec
+}
+
+// probe returns the settings of probeSettings with the given choices: every other field
+// is away from its default.
+func probe(home HomeMode, bus BusMode, x X11Mode) Settings {
+	for _, s := range probeSettings() {
+		if s.Home == home && s.SessionBus == bus && s.X11 == x {
+			return s
+		}
+	}
+	panic("no such probe")
+}
+
+func TestGenerateGolden(t *testing.T) {
+	const privateDir = testHome + "/.local/share/jailcat/homes/firejail-test"
+	tests := []struct {
+		file   string
+		base   string
+		edit   func(s *Settings)
+		extras []string
+	}{
+		{file: "code-plain.profile", base: "code.profile"},
+		{
+			file: "code-changes.profile", base: "code.profile",
+			edit: func(s *Settings) {
+				s.Sound = true
+				s.Network = NetNone
+				s.Folders = append(s.Folders, Folder{Path: testHome + "/Projects", Access: AccessReadOnly})
+			},
+			extras: []string{"dbus-user.talk org.freedesktop.Notifications"},
+		},
+		{
+			file: "code-home-full.profile", base: "code.profile",
+			edit: func(s *Settings) {
+				s.Home = HomeFull
+				s.DownloadsReadWrite = true
+				s.Folders[0].Access = AccessHidden
+			},
+		},
+		{
+			file: "code-home-chosen.profile", base: "code.profile",
+			edit: func(s *Settings) {
+				s.Home = HomeChosen
+				s.DownloadsReadWrite = true
+				s.Folders = append(s.Folders,
+					Folder{Path: testHome + "/Projects", Access: AccessReadOnly},
+					Folder{Path: "/mnt/data", Access: AccessReadWrite})
+			},
+		},
+		{file: "code-home-empty.profile", base: "code.profile", edit: func(s *Settings) { s.Home = HomeEmpty }},
+		{
+			file: "code-home-private.profile", base: "code.profile",
+			edit: func(s *Settings) { s.Home = HomePrivate; s.PrivateDir = privateDir },
+		},
+		{
+			// Dropping a base row makes the ignore of "Code" skip "Code - OSS" too.
+			file: "code-over-matching.profile", base: "code.profile",
+			edit: func(s *Settings) { s.Folders = slices.Delete(s.Folders, 0, 1) },
+		},
+		{file: "none-defaults.profile", base: ""},
+		{
+			// Every field away from its default; Only the folders I choose, so Downloads.
+			file: "none-all-set.profile", base: "",
+			edit: func(s *Settings) {
+				*s = probe(HomeChosen, BusFiltered, X11Xvfb)
+				s.SandboxName = "firejail-test"
+				s.Folders = []Folder{
+					{Path: testHome + "/Projects", Access: AccessReadWrite},
+					{Path: "/mnt/ro", Access: AccessReadOnly},
+					{Path: "/mnt/secret", Access: AccessHidden},
+				}
+			},
+		},
+		{
+			// The same with an own private home, which has no Downloads.
+			file: "none-all-set-private.profile", base: "",
+			edit: func(s *Settings) {
+				*s = probe(HomePrivate, BusFiltered, X11Xephyr)
+				s.SandboxName = "firejail-test"
+				s.PrivateDir = privateDir
+				s.DownloadsReadWrite = false
+				s.Folders = []Folder{{Path: "/mnt/data", Access: AccessReadWrite}, {Path: "/mnt/secret", Access: AccessHidden}}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.file, func(t *testing.T) {
+			g := mustGenerate(t, goldenSpec(t, tt.base, tt.edit, tt.extras...))
+			golden(t, tt.file, g.String())
+		})
+	}
+}
+
+func TestGenerateHeaderAndQuiet(t *testing.T) {
+	e := newWriterEnv(t, testHome)
+	g := mustGenerate(t, e.spec("", nil))
+	if got := lineTexts(g)[:3]; !slices.Equal(got, []string{HeaderLine, BuildLine(7), "quiet"}) {
+		t.Errorf("first lines = %q", got)
+	}
+	if !slices.Equal(Header(7), []string{"# Generated by Jailcat. Do not edit: change it in Jailcat and rebuild.", "# jailcat-build: 7"}) {
+		t.Errorf("Header(7) = %q", Header(7))
+	}
+	if g.Lines[2].Kind != LineQuiet || g.Lines[0].Kind != LineHeader {
+		t.Errorf("kinds = %v, %v", g.Lines[0].Kind, g.Lines[2].Kind)
+	}
+
+	// Quiet off: no quiet line. With a base that has one, an ignore undoes it, and the
+	// profile reads back as not quiet.
+	base := e.profile("noisy.profile", "quiet", "nosound")
+	for _, quiet := range []bool{true, false} {
+		spec := e.specFor(base, func(s *Settings) { s.Quiet = quiet })
+		g := mustGenerate(t, spec)
+		text := g.String()
+		hasQuiet := strings.Contains(text, "\nquiet\n")
+		hasIgnore := strings.Contains(text, "\nignore quiet\n")
+		if hasQuiet != quiet || hasIgnore != !quiet {
+			t.Errorf("quiet=%v: quiet line %v, ignore quiet %v\n%s", quiet, hasQuiet, hasIgnore, text)
+		}
+		prof, err := e.read(e.write(g))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if prof.Quiet != quiet {
+			t.Errorf("quiet=%v: the profile reads back with Quiet = %v", quiet, prof.Quiet)
+		}
+	}
+	// Base None, quiet off: only the header.
+	g = mustGenerate(t, e.spec("", func(s *Settings) { *s = firejailDefaults(); s.Quiet = false }))
+	if got := lineTexts(g); !slices.Equal(got, []string{HeaderLine, BuildLine(7)}) {
+		t.Errorf("lines = %q", got)
+	}
+}
+
+func TestGenerateWriteTo(t *testing.T) {
+	e := newWriterEnv(t, testHome)
+	g := mustGenerate(t, e.spec("code.profile", func(s *Settings) { s.Sound = true }))
+	var buf bytes.Buffer
+	n, err := g.WriteTo(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != int64(buf.Len()) || buf.String() != g.String() || !strings.HasSuffix(buf.String(), "\n") {
+		t.Errorf("WriteTo wrote %d bytes, %q", n, buf.String())
+	}
+	if strings.HasSuffix(buf.String(), "\n\n") {
+		t.Errorf("the text ends with an empty line: %q", buf.String())
+	}
+}
+
+type failWriter struct{}
+
+func (failWriter) Write([]byte) (int, error) { return 0, stdErrors.New("disk full") }
+
+func TestGenerateWriteToFails(t *testing.T) {
+	g := mustGenerate(t, newWriterEnv(t, testHome).spec("", nil))
+	_, err := g.WriteTo(failWriter{})
+	appErr := requireTagErr(t, err, tagProfileWriteFailed, "Generated.WriteTo.ProfileWriteFailed")
+	if appErr.OriginalErr == nil || appErr.OriginalErr.Error() != "disk full" {
+		t.Errorf("OriginalErr = %v", appErr.OriginalErr)
+	}
+}
+
+func TestGenerateLineSources(t *testing.T) {
+	e := newWriterEnv(t, testHome)
+	g := mustGenerate(t, e.spec("code.profile", func(s *Settings) {
+		s.Sound = true
+		s.Network = NetNone
+		s.Folders = append(s.Folders, Folder{Path: testHome + "/Projects", Access: AccessReadOnly})
+		s.Folders[0].Access = AccessHidden
+	}))
+	type src struct {
+		kind   LineKind
+		field  Field
+		folder string
+	}
+	want := map[string]src{
+		"net none":                                {LineSetting, FieldNetwork, ""},
+		"noblacklist ${HOME}/Projects":            {LineSetting, "", testHome + "/Projects"},
+		"read-only ${HOME}/Projects":              {LineSetting, "", testHome + "/Projects"},
+		"blacklist ${HOME}/.config/Code":          {LineSetting, "", "${HOME}/.config/Code"},
+		"ignore nosound":                          {LineIgnore, FieldSound, ""},
+		"ignore noblacklist ${HOME}/.config/Code": {LineIgnore, "", "${HOME}/.config/Code"},
+		"noblacklist ${HOME}/.config/Code - OSS":  {LineRewritten, "", "${HOME}/.config/Code - OSS"},
+		"include " + "/home/rmanos/x":             {},
+	}
+	delete(want, "include /home/rmanos/x")
+	for text, w := range want {
+		i := indexOf(g, text)
+		if i < 0 {
+			t.Errorf("no line %q in\n%s", text, g)
+			continue
+		}
+		l := g.Lines[i]
+		if l.Kind != w.kind || l.Field != w.field || l.Folder != w.folder {
+			t.Errorf("%q: kind %q field %q folder %q, want %q %q %q", text, l.Kind, l.Field, l.Folder, w.kind, w.field, w.folder)
+		}
+	}
+	last := g.Lines[len(g.Lines)-1]
+	if last.Kind != LineInclude || last.Text != "include "+e.sys+"/code.profile" {
+		t.Errorf("last line = %+v", last)
+	}
+}
+
+// TestGenerateOverMatching is the "Code - OSS" case of SPEC §8.1: the ignore that
+// removes the row "Code" also skips the line of the row "Code - OSS", so that line is
+// written again before the ignores.
+func TestGenerateOverMatching(t *testing.T) {
+	e := newWriterEnv(t, "")
+	spec := e.spec("code.profile", func(s *Settings) { s.Folders = slices.Delete(s.Folders, 0, 1) })
+	g := mustGenerate(t, spec)
+
+	const again = "noblacklist ${HOME}/.config/Code - OSS"
+	ignore := indexOf(g, "ignore noblacklist ${HOME}/.config/Code")
+	rewritten := indexOf(g, again)
+	if ignore < 0 || rewritten < 0 || rewritten > ignore {
+		t.Fatalf("want %q before the ignore of Code, got\n%s", again, g)
+	}
+	if g.Lines[rewritten].Kind != LineRewritten {
+		t.Errorf("kind = %q", g.Lines[rewritten].Kind)
+	}
+	// No ignore for the other rows and nothing else rewritten.
+	for _, l := range g.Lines {
+		if l.Kind == LineRewritten && l.Text != again {
+			t.Errorf("unexpected rewritten line %q", l.Text)
+		}
+	}
+	e.requireRoundTrip("over-matching", spec)
+
+	// The firejail reader agrees: the ignores skip the base lines of "Code" and of
+	// "Code - OSS", and the copy Jailcat wrote of the second one stays in effect.
+	prof, err := e.read(e.write(g))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var skipped []string
+	for _, ig := range prof.Ignored {
+		if ig.By.File == prof.Path {
+			skipped = append(skipped, ig.Line.Text)
+		}
+	}
+	if want := []string{"noblacklist ${HOME}/.config/Code", again}; !slices.Equal(skipped, want) {
+		t.Errorf("lines skipped by Jailcat's ignores = %q, want %q", skipped, want)
+	}
+	count := 0
+	for _, l := range prof.Lines {
+		if l.Text == again {
+			count++
+			if l.File != prof.Path {
+				t.Errorf("the line in effect comes from %s, want the generated profile", l.File)
+			}
+		}
+	}
+	if count != 1 {
+		t.Errorf("%q is in effect %d times", again, count)
+	}
+}
+
+func TestGenerateOverMatchingConditional(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("cond.profile",
+		"net none",
+		"noblacklist ${HOME}/a",
+		"?HAS_NET: noblacklist ${HOME}/a b",
+	)
+	spec := e.specFor(base, func(s *Settings) {
+		s.Folders = slices.DeleteFunc(s.Folders, func(f Folder) bool { return f.Path == "${HOME}/a" })
+	})
+	g := mustGenerate(t, spec)
+	if indexOf(g, "?HAS_NET: noblacklist ${HOME}/a b") < 0 {
+		t.Errorf("the conditional line was not written again with its condition:\n%s", g)
+	}
+}
+
+// TestGenerateConditionalState: a "?HAS_NET:" line of the base took effect because the
+// base has "net none". When the build ignores that "net none", the condition turns
+// false, so the line is written again without it.
+func TestGenerateConditionalState(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("state.profile", "net none", "dbus-user none", "?HAS_NET: nou2f", "?HAS_NODBUS: env NO_FILE_DIALOG=1", "?ALLOW_TRAY: novideo")
+
+	g := mustGenerate(t, e.specFor(base, func(s *Settings) { s.Network = NetFull }))
+	i := indexOf(g, "nou2f")
+	if i < 0 || g.Lines[i].Kind != LineRewritten || i > indexOf(g, "ignore net none") {
+		t.Errorf("want nou2f written again before the ignores:\n%s", g)
+	}
+	if indexOf(g, "env NO_FILE_DIALOG=1") >= 0 || indexOf(g, "novideo") >= 0 {
+		t.Errorf("a line whose state the build does not change must stay conditional:\n%s", g)
+	}
+	e.requireRoundTrip("net full", e.specFor(base, func(s *Settings) { s.Network = NetFull }))
+
+	// The session bus is the state of the second line.
+	g = mustGenerate(t, e.specFor(base, func(s *Settings) { s.SessionBus = BusFull }))
+	if indexOf(g, "env NO_FILE_DIALOG=1") < 0 {
+		t.Errorf("want the HAS_NODBUS line written again:\n%s", g)
+	}
+	e.requireRoundTrip("session bus full", e.specFor(base, func(s *Settings) { s.SessionBus = BusFull }))
+
+	// An Extra rule counts too.
+	g = mustGenerate(t, e.specFor(base, nil, "ignore net none"))
+	if indexOf(g, "nou2f") < 0 {
+		t.Errorf("want nou2f written again for the Extra rule:\n%s", g)
+	}
+
+	// Nothing touches the state: the base stays as it is.
+	g = mustGenerate(t, e.specFor(base, func(s *Settings) { s.Sound = false }))
+	if strings.Contains(g.String(), "nou2f") {
+		t.Errorf("nothing to write again:\n%s", g)
+	}
+}
+
+func TestGenerateExtraRuleSkippedByIgnore(t *testing.T) {
+	e := newWriterEnv(t, "")
+	spec := e.spec("code.profile", func(s *Settings) { s.Sound = true }, "nosound", "# a comment", "", "  dbus-user.talk   org.x  # note")
+	g := mustGenerate(t, spec)
+	first := indexOf(g, "nosound")
+	ignore := indexOf(g, "ignore nosound")
+	if first < 0 || ignore < 0 || first > ignore || g.Lines[first].Kind != LineRewritten {
+		t.Errorf("the Extra rule that an ignore would skip must come before the ignores:\n%s", g)
+	}
+	extra := slices.IndexFunc(g.Lines, func(l GeneratedLine) bool { return l.Kind == LineExtra && l.Text == "nosound" })
+	if extra < 0 || indexOf(g, "dbus-user.talk org.x") < 0 {
+		t.Errorf("the Extra rules are written as normalized text:\n%s", g)
+	}
+	prof, err := e.read(e.write(g))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if BaseValues(prof, e.home).Settings.Sound {
+		t.Errorf("the user's nosound must stay in effect")
+	}
+}
+
+func TestGenerateNoprintersUsesOrigin(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("print.profile", "noprinters", "nosound")
+	spec := e.specFor(base, func(s *Settings) { s.Printers = true })
+	g := mustGenerate(t, spec)
+	var ignores []string
+	for _, l := range g.Lines {
+		if l.Kind == LineIgnore {
+			ignores = append(ignores, l.Text)
+		}
+	}
+	if want := []string{"ignore noprinters"}; !slices.Equal(ignores, want) {
+		t.Errorf("ignores = %q, want %q", ignores, want)
+	}
+	if strings.Contains(g.String(), "blacklist /dev/lp") {
+		t.Errorf("the lines firejail makes from noprinters must not be named:\n%s", g)
+	}
+	e.requireRoundTrip("noprinters", spec)
+	// Turning printers off again on a base that has none writes the command.
+	g = mustGenerate(t, e.spec("code.profile", func(s *Settings) { s.Printers = false }))
+	if indexOf(g, "noprinters") < 0 {
+		t.Errorf("noprinters not written:\n%s", g)
+	}
+}
+
+func TestGenerateWhitelistROCannotBeCancelled(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("ro.profile", "whitelist-ro ${HOME}/.config/ro", "noblacklist ${HOME}/b", "whitelist ${HOME}/b")
+
+	// Unchanged: the locked row stays and nothing is written about it.
+	g := mustGenerate(t, e.specFor(base, func(s *Settings) { s.Sound = false }))
+	if strings.Contains(g.String(), "ro") && strings.Contains(g.String(), ".config/ro") {
+		t.Errorf("a locked row must not be touched:\n%s", g)
+	}
+	e.requireRoundTrip("locked row stays", e.specFor(base, func(s *Settings) { s.Sound = false }))
+
+	// Leaving "Only the folders I choose" needs the whitelist line cancelled.
+	for _, mode := range []HomeMode{HomeFull, HomeEmpty, HomePrivate} {
+		_, err := Generate(e.specFor(base, func(s *Settings) { s.Home = mode; s.PrivateDir = "${HOME}/p" }))
+		appErr := requireTagErr(t, err, tagLineUncancellable, "Generate->generator.home->generator.cancel.IgnoreImpossible")
+		if appErr.Metadata["origin"] != "whitelist-ro ${HOME}/.config/ro" {
+			t.Errorf("%s: metadata = %v", mode, appErr.Metadata)
+		}
+	}
+
+	// A locked row that the overrides try to remove is left as it is by Apply.
+	spec := e.specFor(base, nil)
+	spec.Overrides = Overrides{Folders: []FolderOverride{{Path: "${HOME}/.config/ro", Removed: true}}}
+	mustGenerate(t, spec)
+}
+
+func TestGeneratePrivateHomeIgnoresMkdirAndMkfile(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("mk.profile", "mkdir ${HOME}/.cache/app", "mkfile ${HOME}/.app.conf", "nosound")
+	for _, from := range []string{"changed", "unchanged"} {
+		spec := e.specFor(base, func(s *Settings) {
+			s.Home = HomePrivate
+			s.PrivateDir = "${HOME}/.local/share/jailcat/homes/x"
+		})
+		if from == "unchanged" {
+			// A base that already has a private home still gets the two ignores.
+			base2 := e.profile("mk2.profile", "private ${HOME}/.local/share/jailcat/homes/x", "mkdir ${HOME}/.cache/app", "mkfile ${HOME}/.app.conf")
+			spec = e.specFor(base2, nil)
+		}
+		g := mustGenerate(t, spec)
+		for _, want := range []string{"ignore mkdir", "ignore mkfile"} {
+			if i := indexOf(g, want); i < 0 || g.Lines[i].Field != FieldHome {
+				t.Errorf("%s: no %q for the home in\n%s", from, want, g)
+			}
+		}
+		prof, err := e.read(e.write(g))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, l := range prof.Lines {
+			if l.Command == "mkdir" || l.Command == "mkfile" {
+				t.Errorf("%s: %q is still read", from, l.Text)
+			}
+		}
+		if len(prof.Ignored) != 2 {
+			t.Errorf("%s: Ignored = %v", from, texts(linesOf(prof.Ignored)))
+		}
+		e.requireRoundTrip(from, spec)
+	}
+	// Other homes do not ignore them.
+	g := mustGenerate(t, e.specFor(base, func(s *Settings) { s.Home = HomeEmpty }))
+	if strings.Contains(g.String(), "ignore mkdir") {
+		t.Errorf("an empty home must not ignore mkdir:\n%s", g)
+	}
+}
+
+func TestGenerateHomeFromRestrictingBase(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("home.profile", "private", "whitelist ${HOME}/a", "noblacklist ${HOME}/a")
+	for _, mode := range []HomeMode{HomeFull, HomeChosen, HomeEmpty, HomePrivate} {
+		spec := e.specFor(base, func(s *Settings) { s.Home = mode; s.PrivateDir = "${HOME}/p" })
+		e.requireRoundTrip(string(mode), spec)
+	}
+	g := mustGenerate(t, e.specFor(base, func(s *Settings) { s.Home = HomeFull }))
+	for _, want := range []string{"ignore private", "ignore whitelist ${HOME}/a"} {
+		if indexOf(g, want) < 0 {
+			t.Errorf("no %q in\n%s", want, g)
+		}
+	}
+}
+
+// TestGenerateSharedLine: "nodbus" sets both buses, so changing one bus writes the
+// other again.
+func TestGenerateSharedLine(t *testing.T) {
+	e := newWriterEnv(t, "")
+	base := e.profile("nodbus.profile", "nodbus", "nosound")
+	for _, mode := range []BusMode{BusFull, BusFiltered} {
+		spec := e.specFor(base, func(s *Settings) { s.SessionBus = mode })
+		g := mustGenerate(t, spec)
+		if indexOf(g, "ignore nodbus") < 0 || indexOf(g, "dbus-system none") < 0 {
+			t.Errorf("session bus %s: want ignore nodbus and dbus-system none in\n%s", mode, g)
+		}
+		e.requireRoundTrip("session bus "+string(mode), spec)
+	}
+	e.requireRoundTrip("system bus full", e.specFor(base, func(s *Settings) { s.SystemBus = BusFull }))
+}
+
+func TestGenerateIgnoreLimit(t *testing.T) {
+	e := newWriterEnv(t, "")
+	var lines []string
+	for i := 0; i < 30; i++ {
+		lines = append(lines, fmt.Sprintf("ignore nothing%d", i))
+	}
+	lines = append(lines, "nosound", "novideo", "no3d")
+	base := e.profile("many.profile", lines...)
+
+	two := func(s *Settings) { s.Sound = true; s.Camera = true }
+	g := mustGenerate(t, e.specFor(base, two))
+	want := IgnoreCount{Base: 30, Jailcat: 2, Total: 32, Fields: map[Field]int{FieldSound: 1, FieldCamera: 1}}
+	if g.IgnoreCount.Base != want.Base || g.IgnoreCount.Jailcat != 2 || g.IgnoreCount.Total != 32 ||
+		g.IgnoreCount.Fields[FieldSound] != 1 || g.IgnoreCount.Fields[FieldCamera] != 1 {
+		t.Errorf("IgnoreCount = %+v, want %+v", g.IgnoreCount, want)
+	}
+	e.requireRoundTrip("32 ignores", e.specFor(base, two))
+
+	three := func(s *Settings) { two(s); s.GPU = true }
+	_, err := Generate(e.specFor(base, three))
+	appErr := requireTagErr(t, err, tagIgnoreLimit, "Generate->generator.countIgnores.IgnoreLimitExceeded")
+	fields, _ := appErr.Metadata["fields"].(map[string]int)
+	if appErr.Metadata["total"] != 33 || appErr.Metadata["base"] != 30 || appErr.Metadata["jailcat"] != 3 ||
+		appErr.Metadata["extra"] != 0 || fields["sound"] != 1 || fields["gpu"] != 1 {
+		t.Errorf("metadata = %v", appErr.Metadata)
+	}
+
+	// The ignore rows of the Extra rules count too.
+	_, err = Generate(e.specFor(base, two, "ignore something"))
+	appErr = requireTagErr(t, err, tagIgnoreLimit, "Generate->generator.countIgnores.IgnoreLimitExceeded")
+	if appErr.Metadata["extra"] != 1 || appErr.Metadata["total"] != 33 {
+		t.Errorf("metadata = %v", appErr.Metadata)
+	}
+	g = mustGenerate(t, e.specFor(base, func(s *Settings) { s.Sound = true }, "ignore something"))
+	if g.IgnoreCount.Extra != 1 || g.IgnoreCount.Total != 32 {
+		t.Errorf("IgnoreCount = %+v", g.IgnoreCount)
+	}
+
+	// The VS Code chain has 15 ignores of its own.
+	g = mustGenerate(t, e.spec("code.profile", func(s *Settings) { s.Sound = true }))
+	if g.IgnoreCount.Base != 15 || g.IgnoreCount.Total != 16 {
+		t.Errorf("IgnoreCount = %+v", g.IgnoreCount)
+	}
+}
+
+func TestGenerateRefusals(t *testing.T) {
+	e := newWriterEnv(t, "")
+	const gen = "Generate->generator."
+	tests := []struct {
+		name  string
+		spec  ProfileSpec
+		tag   string
+		route string
+	}{
+		{"chosen with only hidden folders", e.spec("", func(s *Settings) {
+			s.Home = HomeChosen
+			s.Folders = []Folder{{Path: "${HOME}/x", Access: AccessHidden}}
+		}), tagHomeNotRestricted, gen + "rows->generator.checkChosen.HomeNotRestricted"},
+		{"chosen with folders outside the home only", e.spec("", func(s *Settings) {
+			s.Home = HomeChosen
+			s.Folders = []Folder{{Path: "/mnt/data", Access: AccessReadWrite}}
+		}), tagHomeNotRestricted, gen + "rows->generator.checkChosen.HomeNotRestricted"},
+		{"downloads with an empty home", e.spec("", func(s *Settings) {
+			s.Home = HomeEmpty
+			s.DownloadsReadWrite = true
+		}), tagDownloadsHome, gen + "rows.DownloadsNeedRealHome"},
+		{"downloads with a private home", e.spec("", func(s *Settings) {
+			s.Home = HomePrivate
+			s.PrivateDir = "${HOME}/p"
+			s.DownloadsReadWrite = true
+		}), tagDownloadsHome, gen + "rows.DownloadsNeedRealHome"},
+		{"private home without a folder", e.spec("", func(s *Settings) { s.Home = HomePrivate }),
+			tagProfileValueInvalid, gen + "home->lineMaker.fieldLines->lineMaker.path->profileValue.ProfileValueInvalid"},
+		{"base profile without the profile", ProfileSpec{BaseProfile: "/etc/firejail/code.profile", Base: BaseNone()},
+			tagSpecInvalid, "Generate.ProfileSpecInvalid"},
+		{"profile without the base profile path", ProfileSpec{Profile: &Profile{}, Base: BaseNone()},
+			tagSpecInvalid, "Generate.ProfileSpecInvalid"},
+		{"relative base profile", ProfileSpec{BaseProfile: "code.profile", Profile: &Profile{}, Base: BaseNone()},
+			tagSpecInvalid, "Generate.ProfileSpecInvalid"},
+		{"extra row with a new line", e.spec("", nil, "nosound\nnovideo"),
+			tagExtraRowInvalid, gen + "extraRows.ExtraRowInvalid"},
+		{"extra row with a NUL", e.spec("", nil, "nosound\x00"),
+			tagExtraRowInvalid, gen + "extraRows.ExtraRowInvalid"},
+		{"extra row with a carriage return", e.spec("", nil, "nosound\r"),
+			tagExtraRowInvalid, gen + "extraRows.ExtraRowInvalid"},
+		{"folder twice", func() ProfileSpec {
+			spec := e.spec("", nil)
+			spec.Base.Settings.Folders = []Folder{{Path: "/mnt/a", Access: AccessReadWrite}, {Path: "/mnt/a", Access: AccessReadOnly}}
+			return spec
+		}(), tagFolderDuplicate, gen + "rows.FolderRowDuplicate"},
+		{"line too long", e.spec("", func(s *Settings) { s.PrivateBin = []string{strings.Repeat("a", 9000)} }),
+			tagLineTooLong, gen + "fields->generator.emit.ProfileLineTooLong"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g, err := Generate(tt.spec)
+			if err == nil {
+				t.Fatalf("Generate succeeded:\n%s", g)
+			}
+			if g != nil {
+				t.Errorf("Generate returned lines with an error")
+			}
+			requireTag(t, err, tt.tag, tt.route)
+		})
+	}
+}
+
+func TestGenerateModeInvalid(t *testing.T) {
+	e := newWriterEnv(t, "")
+	tests := []struct {
+		name  string
+		edit  func(s *Settings)
+		route string
+	}{
+		{"home", func(s *Settings) { s.Home = "everything" }, "Generate->generator.home.ProfileModeInvalid"},
+		{"home unspecified", func(s *Settings) { s.Home = HomeUnspecified }, "Generate->generator.home.ProfileModeInvalid"},
+		{"network", func(s *Settings) { s.Network = "some" }, "generator.fields->lineMaker.fieldLines.ProfileModeInvalid"},
+		{"session bus", func(s *Settings) { s.SessionBus = "some" }, "generator.fields->lineMaker.fieldLines.ProfileModeInvalid"},
+		{"system bus", func(s *Settings) { s.SystemBus = "some" }, "generator.fields->lineMaker.fieldLines.ProfileModeInvalid"},
+		{"x11", func(s *Settings) { s.X11 = "some" }, "generator.fields->lineMaker.fieldLines.ProfileModeInvalid"},
+		{"folder access", func(s *Settings) { s.Folders = []Folder{{Path: "/mnt/a", Access: "some"}} },
+			"generator.rows->generator.row->lineMaker.rowCommands.ProfileModeInvalid"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Generate(e.spec("", tt.edit))
+			requireTag(t, err, tagModeInvalid, tt.route)
+		})
+	}
+}
+
+func TestGenerateValueRange(t *testing.T) {
+	e := newWriterEnv(t, "")
+	minus, high := -21, 20
+	tests := []struct {
+		name string
+		edit func(s *Settings)
+	}{
+		{"memory negative", func(s *Settings) { s.MemoryBytes = -1 }},
+		{"core too high", func(s *Settings) { s.CPUs = []int{32} }},
+		{"core negative", func(s *Settings) { s.CPUs = []int{-1} }},
+		{"nice too low", func(s *Settings) { s.Nice = &minus }},
+		{"nice too high", func(s *Settings) { s.Nice = &high }},
+		{"timeout negative", func(s *Settings) { s.Timeout = -time.Second }},
+		{"timeout 100 hours", func(s *Settings) { s.Timeout = 100 * time.Hour }},
+		{"timeout with a fraction", func(s *Settings) { s.Timeout = 1500 * time.Millisecond }},
+		{"open files negative", func(s *Settings) { s.MaxFiles = -1 }},
+		{"processes negative", func(s *Settings) { s.MaxProcs = -1 }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Generate(e.spec("", tt.edit))
+			requireTag(t, err, tagValueRange, "generator.fields->lineMaker.fieldLines.ProfileValueOutOfRange")
+		})
+	}
+}
+
+func TestGenerateValueErrors(t *testing.T) {
+	e := newWriterEnv(t, "")
+	reasons := map[string]string{
+		"new line":        "a\nb",
+		"carriage return": "a\rb",
+		"NUL":             "a\x00b",
+		"hash":            "a#b",
+		"tab":             "a\tb",
+		"leading blank":   " a",
+		"trailing blank":  "a ",
+		"two blanks":      "a  b",
+	}
+	wantReason := map[string]string{
+		"new line": "a new line", "carriage return": "a new line", "NUL": "a NUL character",
+		"hash": "a # character", "tab": "a tab", "leading blank": "a blank at the start or the end",
+		"trailing blank": "a blank at the start or the end", "two blanks": "two blanks in a row",
+	}
+	fieldsWithValues := []struct {
+		name  string
+		edit  func(s *Settings, v string)
+		route string
+		path  bool
+	}{
+		{name: "hosts file", edit: func(s *Settings, v string) { s.HostsFile = "/etc/" + v },
+			route: "generator.fields->lineMaker.fieldLines->lineMaker.path->profileValue.ProfileValueInvalid", path: true},
+		{name: "dns", edit: func(s *Settings, v string) { s.DNS = []string{v} },
+			route: "generator.fields->lineMaker.fieldLines->profileValue.ProfileValueInvalid"},
+		{name: "session talk", edit: func(s *Settings, v string) { s.SessionTalk = []string{v} },
+			route: "generator.fields->lineMaker.fieldLines->profileValue.ProfileValueInvalid"},
+		{name: "session own", edit: func(s *Settings, v string) { s.SessionOwn = []string{v} },
+			route: "generator.fields->lineMaker.fieldLines->profileValue.ProfileValueInvalid"},
+		{name: "private-bin", edit: func(s *Settings, v string) { s.PrivateBin = []string{v} },
+			route: "generator.fields->lineMaker.fieldLines->profileList->profileValue.ProfileValueInvalid"},
+		{name: "private-etc", edit: func(s *Settings, v string) { s.PrivateEtc = []string{v} },
+			route: "generator.fields->lineMaker.fieldLines->profileList->profileValue.ProfileValueInvalid"},
+		{name: "protocol", edit: func(s *Settings, v string) { s.Protocols = []string{v} },
+			route: "generator.fields->lineMaker.fieldLines->profileList->profileValue.ProfileValueInvalid"},
+		{name: "env value", edit: func(s *Settings, v string) { s.Env = []EnvVar{{Name: "A", Value: v}} },
+			route: "generator.fields->lineMaker.fieldLines->profileValue.ProfileValueInvalid"},
+		{name: "folder", edit: func(s *Settings, v string) { s.Folders = []Folder{{Path: "/mnt/" + v, Access: AccessReadWrite}} },
+			route: "generator.rows->generator.row->lineMaker.path->profileValue.ProfileValueInvalid", path: true},
+		{name: "private home", edit: func(s *Settings, v string) { s.Home = HomePrivate; s.PrivateDir = "/mnt/" + v },
+			route: "generator.home->lineMaker.fieldLines->lineMaker.path->profileValue.ProfileValueInvalid", path: true},
+		{name: "single instance", edit: func(s *Settings, v string) { s.SingleInstance = true; s.SandboxName = v },
+			route: "generator.fields->lineMaker.fieldLines->profileValue.ProfileValueInvalid"},
+	}
+	for _, f := range fieldsWithValues {
+		for name, v := range reasons {
+			if f.path && name == "leading blank" {
+				continue // "/etc/ a" is a fine path
+			}
+			t.Run(f.name+": "+name, func(t *testing.T) {
+				_, err := Generate(e.spec("", func(s *Settings) { f.edit(s, v) }))
+				appErr := requireTagErr(t, err, tagProfileValueInvalid, f.route)
+				if appErr.Metadata["reason"] != wantReason[name] {
+					t.Errorf("reason = %v, want %q", appErr.Metadata["reason"], wantReason[name])
+				}
+			})
+		}
+	}
+
+	// Lists: a comma or an empty item.
+	for _, item := range []string{"a,b", ",", ""} {
+		_, err := Generate(e.spec("", func(s *Settings) { s.PrivateBin = []string{item} }))
+		requireTag(t, err, tagProfileListItemInvalid, "generator.fields->lineMaker.fieldLines->profileList.ProfileListItemInvalid")
+	}
+	// Empty values and a variable name that is not one.
+	for _, edit := range []func(s *Settings){
+		func(s *Settings) { s.DNS = []string{""} },
+		func(s *Settings) { s.SessionTalk = []string{""} },
+		func(s *Settings) { s.Env = []EnvVar{{Name: "1A", Value: "x"}} },
+		func(s *Settings) { s.Env = []EnvVar{{Name: "A=B", Value: "x"}} },
+		func(s *Settings) { s.Env = []EnvVar{{Name: "", Value: "x"}} },
+	} {
+		_, err := Generate(e.spec("", edit))
+		requireTag(t, err, tagProfileValueInvalid, "generator.fields->lineMaker.fieldLines")
+	}
+}
+
+func TestProfileValue(t *testing.T) {
+	good := []string{"a", "a b", "${HOME}/.config/Code - OSS", "NAME=value", "ü ß", "a.b-c_d/e"}
+	for _, v := range good {
+		got, err := profileValue(v)
+		if err != nil || got != v {
+			t.Errorf("profileValue(%q) = %q, %v", v, got, err)
+		}
+	}
+	bad := map[string]string{
+		"": "nothing", "a\nb": "a new line", "\n": "a new line", "a\rb": "a new line", "a\x00": "a NUL character",
+		"#": "a # character", "a #b": "a # character", "a\tb": "a tab", " a": "a blank at the start or the end",
+		"a ": "a blank at the start or the end", "a  b": "two blanks in a row",
+	}
+	for v, reason := range bad {
+		_, err := profileValue(v)
+		appErr := requireTagErr(t, err, tagProfileValueInvalid, "profileValue.ProfileValueInvalid")
+		if appErr.Metadata["reason"] != reason || appErr.Metadata["value"] != v {
+			t.Errorf("profileValue(%q): metadata = %v, want reason %q", v, appErr.Metadata, reason)
+		}
+	}
+	// What profileValue accepts survives firejail's normalization unchanged.
+	for _, v := range good {
+		if got := Normalize("x " + v); got != "x "+v {
+			t.Errorf("Normalize changes the accepted value %q into %q", v, got)
+		}
+	}
+	if got, err := profileList([]string{"a", "b c"}); err != nil || got != "a,b c" {
+		t.Errorf("profileList = %q, %v", got, err)
+	}
+}
+
+func TestFieldLinesUnknownField(t *testing.T) {
+	_, err := lineMaker{}.fieldLines("no_such_field", &Settings{})
+	requireTag(t, err, tagFieldUnknown, "lineMaker.fieldLines.ProfileFieldUnknown")
+}
+
+// TestFieldLinesCoverEveryField makes sure no field of the table is unknown to the
+// writer: a new field must be added to fieldLines (or to the list of fields without a
+// profile line).
+func TestFieldLinesCoverEveryField(t *testing.T) {
+	for _, f := range Fields() {
+		if _, err := (lineMaker{}).fieldLines(f, &Settings{}); err != nil {
+			if appErr, ok := jerrors.FromError(err); ok && appErr.Tag == tagFieldUnknown {
+				t.Errorf("fieldLines has no case for %s", f)
+			}
+		}
+	}
+}
+
+func TestLinesOfEveryMapping(t *testing.T) {
+	m := lineMaker{home: "/home/me"}
+	nice := -5
+	s := Settings{
+		Home: HomePrivate, PrivateDir: "/home/me/.local/share/jailcat/homes/x", DownloadsReadWrite: true,
+		HideRemovable: true, NoExecHome: true, PrivateTmp: true, PrivateDev: true, PrivateCache: true,
+		Network: NetNone, DNS: []string{"1.1.1.1", "9.9.9.9"}, HostsFile: "/home/me/hosts", Firewall: true,
+		SessionBus: BusFiltered, SessionTalk: []string{"org.a", "org.b.*"}, SessionOwn: []string{"org.c"},
+		SystemBus: BusNone, X11: X11Xvfb,
+		Seccomp: true, DropCaps: true, NoNewPrivs: true, NoRoot: true, RestrictNamespaces: true,
+		MemoryDenyWriteExecute: true, Landlock: true, Protocols: []string{"unix", "inet"},
+		PrivateBin: []string{"sh", "ls"}, PrivateEtc: []string{"hosts", "ssl"},
+		Env:         []EnvVar{{"A", "b c"}, {"EMPTY", ""}},
+		MemoryBytes: 1 << 30, CPUs: []int{0, 3}, Nice: &nice, Timeout: 3725 * time.Second, MaxFiles: 500, MaxProcs: 100,
+		SingleInstance: true, SandboxName: "firejail-x", Quiet: true,
+		Sound: true, Camera: true, GPU: true, Printers: true, U2F: true, Input: true, DVD: true, TV: true, TPM: true,
+	}
+	want := map[Field][]string{
+		FieldHome: nil, FieldPrivateDir: {"private ${HOME}/.local/share/jailcat/homes/x"},
+		FieldDownloadsReadWrite: {"noblacklist ${DOWNLOADS}"},
+		FieldHideRemovable:      {"disable-mnt"}, FieldNoExecHome: {"noexec ${HOME}"}, FieldPrivateTmp: {"private-tmp"},
+		FieldPrivateDev: {"private-dev"}, FieldPrivateCache: {"private-cache"},
+		FieldNetwork: {"net none"}, FieldDNS: {"dns 1.1.1.1", "dns 9.9.9.9"}, FieldHostsFile: {"hosts-file ${HOME}/hosts"},
+		FieldFirewall:    {"netfilter"},
+		FieldSessionBus:  {"dbus-user filter"},
+		FieldSessionTalk: {"dbus-user.talk org.a", "dbus-user.talk org.b.*"}, FieldSessionOwn: {"dbus-user.own org.c"},
+		FieldSystemBus: {"dbus-system none"}, FieldX11: {"x11 xvfb"},
+		FieldSeccomp: {"seccomp"}, FieldDropCaps: {"caps.drop all"}, FieldNoNewPrivs: {"nonewprivs"}, FieldNoRoot: {"noroot"},
+		FieldRestrictNamespaces: {"restrict-namespaces"}, FieldMemoryDenyWriteExecute: {"memory-deny-write-execute"},
+		FieldLandlock:   {"landlock.enforce", "include ${CFG}/landlock-common.inc"},
+		FieldProtocols:  {"protocol unix,inet"},
+		FieldPrivateBin: {"private-bin sh,ls"}, FieldPrivateEtc: {"private-etc hosts,ssl"},
+		FieldEnv:    {"env A=b c", "env EMPTY="},
+		FieldMemory: {"rlimit-as 1073741824"}, FieldCPUs: {"cpu 0,3"}, FieldNice: {"nice -5"}, FieldTimeout: {"timeout 01:02:05"},
+		FieldMaxFiles: {"rlimit-nofile 500"}, FieldMaxProcs: {"rlimit-nproc 100"},
+		FieldSingleInstance: {"join-or-start firejail-x"}, FieldQuiet: {"quiet"},
+		// All devices allowed: no lines.
+		FieldSound: nil, FieldCamera: nil, FieldGPU: nil, FieldPrinters: nil, FieldU2F: nil, FieldInput: nil,
+		FieldDVD: nil, FieldTV: nil, FieldTPM: nil,
+	}
+	for f, w := range want {
+		got, err := m.fieldLines(f, &s)
+		if err != nil {
+			t.Errorf("%s: %v", f, err)
+			continue
+		}
+		if !slices.Equal(got, w) {
+			t.Errorf("%s = %q, want %q", f, got, w)
+		}
+	}
+	// The devices, once blocked.
+	blocked := Settings{}
+	for f, w := range map[Field]string{
+		FieldSound: "nosound", FieldCamera: "novideo", FieldGPU: "no3d", FieldPrinters: "noprinters", FieldU2F: "nou2f",
+		FieldInput: "noinput", FieldDVD: "nodvd", FieldTV: "notv", FieldTPM: "notpm",
+	} {
+		got, err := m.fieldLines(f, &blocked)
+		if err != nil || !slices.Equal(got, []string{w}) {
+			t.Errorf("%s = %q, %v, want %q", f, got, err, w)
+		}
+	}
+	// Chosen home: a row needs the whitelist.
+	for a, w := range map[Access][]string{
+		AccessReadWrite: {"noblacklist /mnt/x", "whitelist /mnt/x"},
+		AccessReadOnly:  {"noblacklist /mnt/x", "whitelist /mnt/x", "read-only /mnt/x"},
+		AccessHidden:    {"blacklist /mnt/x"},
+	} {
+		got, err := m.rowLines("/mnt/x", a, true)
+		if err != nil || !slices.Equal(got, w) {
+			t.Errorf("row %s chosen = %q, %v", a, got, err)
+		}
+	}
+	if got, _ := m.rowLines("/home/me/x", AccessReadOnly, false); !slices.Equal(got, []string{"noblacklist ${HOME}/x", "read-only ${HOME}/x"}) {
+		t.Errorf("row under the home = %q", got)
+	}
+	if got, _ := m.rowLines("/home/me", AccessHidden, false); !slices.Equal(got, []string{"blacklist ${HOME}"}) {
+		t.Errorf("the home itself = %q", got)
+	}
+	if got, _ := m.rowLines("/home/mexico/x", AccessHidden, false); !slices.Equal(got, []string{"blacklist /home/mexico/x"}) {
+		t.Errorf("a folder next to the home = %q", got)
+	}
+}

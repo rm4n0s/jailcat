@@ -109,3 +109,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** `BaseValues` takes the home path as a second argument. Folder rows come from `.profile` and `.local` files; system folders and globs go to the read-only list (SPEC §7.1 updated). Base rows stay with Empty and Own private home, where `${HOME}` is the private home (SPEC §7.1). From firejail's source: `protocol` lines merge with `+`/`-`/`=`, `cpu` takes 0–31, `nice` is clamped to 0 for non-root, `rlimit-as` takes K/M/G (SPEC §7.7 updated). Launcher fields never come from a profile except `join-or-start`.
+
+## 2.3 Writing profiles (`internal/firejail`, writer)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-2.3-profile-writer
+- **Summary:** `Generate` writes the profile of SPEC §9.1 from a base, overrides and Extra rules: for every field whose final value differs from what the `include` alone gives, it cancels the base lines behind it with `ignore` and writes the final value's lines; positive lines come before the ignores, base lines an `ignore` would hit by accident are written again above it, the 32-ignore limit is counted with the base chain, and Own private home adds `ignore mkdir`/`ignore mkfile`. Every value goes through one escaping function. `CheckExtraRules` checks the Extra rules rows with errors and warnings.
+- **Main files:** `internal/firejail/header.go`, `writer.go`, `writer_lines.go`, `writer_value.go`, `extrarules.go`, `validate.go` (Severity, Row, two problems), their tests, `testdata/profiles/` (10 golden profiles); `docs/SPEC.md` §9.1.
+- **Tests:** the round trip (generate → read with step 2.1's reader → base values → equal to the edited settings) for every field over 8 bases, every home mode with every folder-row kind, and seeded random combinations; the mutation check (removing the cancel, the rewrite or the shared-line handling makes it fail); golden profiles reviewed line by line by the manager; over-matching, `whitelist-ro`, `noprinters`, conditionals, the ignore limit, every escaping error, about 120 Extra-rules rows; route tests for all 14 tags.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none (step 3.4) · display tests none
+- **Proof:** C: the golden profiles `internal/firejail/testdata/profiles/code-changes.profile`, `code-home-private.profile`, `code-over-matching.profile` and `none-defaults.profile`.
+- **Manual checks:** none
+- **Deviations and follow-ups:** the file order is now positive lines, then `ignore` lines, then Extra rules, then `include` (SPEC §9.1 updated). A base conditional line that Jailcat's changes would turn false is written again without its condition; a false one that becomes true is left to firejail. `private-cache` also acts on the real home under `private DIR` (man page), but only as a mount inside the sandbox, so nothing is written for it. Chosen home without any `whitelist` under the home is refused.
