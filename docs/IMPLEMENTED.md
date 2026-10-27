@@ -161,3 +161,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** saving or clearing a draft does not change `UpdatedAt`. App kinds, icon modes and file kinds are constants but not checked on write.
+
+## 3.3 Installing (`internal/install`)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-3.3-installing
+- **Summary:** `Prepare` turns a build into its files (profile, launcher, SVG icon with its fallback reason, the desktop entry of SPEC §9.3 with field codes, copied keys, `StartupWMClass` and same-binary actions, and the private home) without writing anything. `Check` classifies every target by SPEC §9.5's ownership rules, `Install` re-checks and writes atomically (temp file, fsync, chmod, rename) with the desktop entry last, and `Uninstall` removes only recorded files that are unchanged, keeping the private home unless asked.
+- **Main files:** `internal/install/files.go`, `prepare.go`, `desktop.go`, `check.go`, `install.go`, `uninstall.go`, their tests, `testdata/` (apps, icons, golden texts).
+- **Tests:** a whole VS Code-like install into a temp home compared with golden texts; every conflict kind, unconfirmed and confirmed overwrites, a stale plan; icon fallbacks; field codes, actions, localized action names, `StartupWMClass`, `MimeType`, menu and bin switches; the entry parses back; uninstall cases; route tests for all 21 tags. 94% coverage.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none (step 3.4) · display tests none
+- **Proof:** C: `internal/install/testdata/golden/vscode.desktop`, `vscode.sh` (the launcher), `vscode.profile`, reviewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** `Install` takes the owner lookup (it re-runs `Check`); `UninstallOpts` carries `Dirs`. An edited file is overwritable only if it still has Jailcat's header. The main `Exec` keeps only the app's first field code, not its other arguments. An empty menu name is refused when the entry is installed.
