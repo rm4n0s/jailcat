@@ -185,3 +185,19 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
 - **Proof:** none
 - **Manual checks:** none
 - **Deviations and follow-ups:** the check runs without `--quiet`, which would hide the nested-sandbox warning (SPEC §11.3 updated). The private-home probe first failed on `.bashrc` and `.inputrc`: firejail copies `/etc/skel` files into a fresh home (`fs_home.c`, `skel`), so the probe now allows them. The temporary home of the tests cannot be the sandbox's `$HOME` (firejail takes the account's home), so the probes use folders under `/tmp`.
+
+## 4.1 App shell and app list
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.1-app-shell
+- **Summary:** `go run ./cmd/jailcat` opens Jailcat's window: the app list of SPEC §5 with search, the four filters, Show hidden apps, Refresh, real icons drawn with Glutter's `svg` package (PNG through the image widget, a generic icon otherwise), built marks, "uses firejail" and disabled Flatpak/Snap rows, the firejail-missing banner, and an empty state with Jailcat's icon. Everything slow runs off the UI thread through a `Backend` interface (`LocalBackend` for the real system, a fake in tests). `jailcat -setup-desktop` (SPEC §3.2, the owner's request) puts Jailcat itself in the application menu.
+- **Main files:** `cmd/jailcat/main.go`, `main_test.go`; `internal/ui/backend.go`, `localbackend.go`, `app.go`, `home.go`, `applist.go`, `approw.go`, `appicon.go`, their tests, `testdata/`; `internal/install/setup.go`, its tests and golden entry; `scripts/headless-wayland.sh` (from Glutter v1.9.0).
+- **Tests:** widget tests with a fake backend (rows, search, filters, built chips, hidden apps, selection, the disabled Flatpak row, scan and builds errors, the banner, every icon fallback); three golden screens; `LocalBackend` on a temp home; `-setup-desktop` golden, quoting of odd paths, a second run replacing the files, and `main`'s exit codes.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![4.1 app list](implemented-proof-images/4.1-app-list.png)
+  The fixture app list in the light theme: SVG and PNG icons, generic icons for the icon-less apps, Firefox with "built ×2", and the empty state with Jailcat's caged cat; viewed by the manager.
+  ![4.1 the app](implemented-proof-images/4.1-app.png)
+  The real app on a scratch home under a headless compositor (dark theme): the system's apps with their real icons and calibre greyed as an already-sandboxed Flatpak; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** with no search text, **All** lists menu apps before binaries (SPEC §4.3 updated). Proof method B uses the XDG variables instead of a dev-home variable. `AppID` lives in `internal/install`. The `-setup-desktop` entry has no Jailcat header and is not a build.

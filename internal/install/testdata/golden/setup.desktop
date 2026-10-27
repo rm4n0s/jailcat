@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Jailcat
+Comment=Build firejail sandboxes for your applications
+Exec=/home/jailcat-test/go/bin/jailcat
+Icon=io.github.rm4n0s.jailcat
+Terminal=false
+Categories=System;Security;Utility;
+StartupWMClass=io.github.rm4n0s.jailcat

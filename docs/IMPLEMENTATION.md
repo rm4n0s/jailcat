@@ -72,7 +72,7 @@ Glutter's `glutter-gen errcheck` is tied to Glutter's module, so these rules are
    golangci-lint run
    go test -race ./...
    ```
-   If the step lists **Firejail tests**, run them too, outside Claude Code's sandbox: `go test -tags jailcat_firejail <packages>`. If the step lists **Display tests**, run them under `scripts/headless-wayland.sh` (from step 3.1): `go test -race -tags jailcat_display <packages>`.
+   If the step lists **Firejail tests**, run them too, outside Claude Code's sandbox: `go test -tags jailcat_firejail <packages>`. If the step lists **Display tests**, run them under `scripts/headless-wayland.sh` (from step 4.1): `go test -race -tags jailcat_display <packages>`.
 9. **Proof images.** Only when the step has a **Proof** item:
    - Produce exactly the images it lists, in `docs/implemented-proof-images/`, named `<id>-<name>.png`.
    - Use the method it names (see "Proof methods").
@@ -101,7 +101,7 @@ Glutter's `glutter-gen errcheck` is tied to Glutter's module, so these rules are
 | Method | Use it for | How |
 |---|---|---|
 | **A. Widget golden** | a screen or widget | A `gluttertest` test pumps the widget with fixture data and saves `Tester.Screenshot()` to the proof path when `JAILCAT_PROOF_DIR` is set (the same test also checks it with `MatchesGolden`) |
-| **B. App self-capture** | the running app | `JAILCAT_DEV_HOME=.jailcat-test/home GLUTTER_SCREENSHOT=docs/implemented-proof-images/<file>.png scripts/headless-wayland.sh -- go run ./cmd/jailcat` (from step 3.1). The app saves its own window and exits |
+| **B. App self-capture** | the running app | `XDG_DATA_HOME=$PWD/.jailcat-test/data XDG_CONFIG_HOME=$PWD/.jailcat-test/config XDG_CACHE_HOME=$PWD/.jailcat-test/cache XDG_BIN_HOME=$PWD/.jailcat-test/bin GLUTTER_SCREENSHOT=docs/implemented-proof-images/<file>.png GLUTTER_SCREENSHOT_AFTER=3s timeout -k 5 60 scripts/headless-wayland.sh -- go run ./cmd/jailcat` (the script is `scripts/headless-wayland.sh`, from step 4.1). The scratch home keeps everything Jailcat writes under `.jailcat-test/`; the system's apps are only read. The app saves its own window and exits |
 | **C. Generated files** | profile, launcher, desktop entry, icon | The file itself is the proof: the step lists which golden text files under `testdata/` to show in the `IMPLEMENTED.md` entry; an icon is shown by rendering it with `rsvg-convert -w 128 -o docs/implemented-proof-images/<file>.png <icon.svg>` |
 | **D. User desktop** | what only the real menu and taskbar show | Ask the user to run the command given in the step and save a screenshot at the given path. Then view and verify the image yourself |
 
@@ -268,9 +268,10 @@ Glutter's `glutter-gen errcheck` is tied to Glutter's module, so these rules are
 **Goal:** `cmd/jailcat` runs the window of SPEC §5 with the app list.
 **Read:** SPEC §5, §4.3, §10.4, §14; Glutter's `examples/counter`, `examples/svg` and its SPEC §13 (UI thread) in the module cache.
 **Tasks:**
-1. `main`: `xdg.FromOS`, `EnsureDirs`, the store, the logger (`JAILCAT_LOG`), firejail lookup, then `m.RunApp` with app ID `io.github.rm4n0s.jailcat`. `JAILCAT_DEV_HOME` (debug builds only) points every XDG folder into a scratch home for proofs.
+1. `main`: `xdg.FromOS`, `EnsureDirs`, the store, the logger (`JAILCAT_LOG`), firejail lookup, then `m.RunApp` with app ID `io.github.rm4n0s.jailcat`. There is no dev-home variable: manual runs and proofs point `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_CACHE_HOME` and `XDG_BIN_HOME` at folders under `.jailcat-test/` (CLAUDE.md "Commands"). The flags are parsed with the standard `flag` package; `-setup-desktop` is task 4.
 2. `internal/ui`: the app widget, the split view, the app list with icons (`svg` package, `svg.NewSvgCacheScope`), search and filters, built marks, the empty state, the firejail-missing banner. Scanning off the UI thread.
 3. `scripts/headless-wayland.sh` (from Glutter's script of the same name, adapted).
+4. `jailcat -setup-desktop` (SPEC §3.2): Jailcat's own menu entry and icon, written atomically under `$XDG_DATA_HOME`, then exit.
 **Tests:** widget tests with a fake app list and goldens.
 **Proof:** method A `4.1-app-list.png`; method B `4.1-app.png` (the app on a scratch home with fixture apps).
 

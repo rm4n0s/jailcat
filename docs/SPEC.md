@@ -49,6 +49,13 @@ All folders come from `internal/xdg`, resolved once at start from the environmen
 
 Jailcat creates its folders with mode `0700` (data, homes) or `0755` (the rest) when they are missing. If the bin folder is not on `$PATH`, the Launcher tab says so.
 
+### §3.2 Jailcat in the application menu (`-setup-desktop`)
+`jailcat -setup-desktop` adds Jailcat itself to the desktop's application menu and exits, without opening the window, the log or the database (the owner's request, 2026-10-27, like english-tutor's flag of the same name). It writes, under `$XDG_DATA_HOME` (`~/.local/share` when unset or not absolute):
+- `icons/hicolor/scalable/apps/io.github.rm4n0s.jailcat.svg`: Jailcat's own icon (`assets/jailcat.svg`)
+- `applications/io.github.rm4n0s.jailcat.desktop`: a desktop entry named after the app ID, so the window's Wayland `app_id` and X11 `WM_CLASS` match it (`StartupWMClass=io.github.rm4n0s.jailcat`). `Name=Jailcat`, `Comment=Build firejail sandboxes for your applications`, `Exec` is the absolute path of the running program with symbolic links resolved (quoted and escaped as the Desktop Entry Specification requires), `Icon=io.github.rm4n0s.jailcat`, `Terminal=false`, `Categories=System;Security;Utility;`
+
+Both files are written through a temporary file renamed over the target, the icon first, so running the flag again (after moving or rebuilding the program) replaces them. They carry no `X-Jailcat-Build` key: they are not a build and are not recorded in the database. The program prints where it wrote the files, or, on failure, the reason, and exits with 1. The entry points at the program that ran the flag, so it should be run from the installed binary (`go install`), not from `go run`.
+
 ## §4 Finding apps
 
 ### §4.1 Desktop entries
@@ -69,7 +76,7 @@ Jailcat creates its folders with mode `0700` (data, homes) or `0755` (the rest) 
 - Binaries are listed with a terminal icon and their name
 
 ### §4.3 Search
-One search box matches name, generic name, keywords, binary name and binary path, case-insensitive, by substring. Results put matches at the start of the name first. Filters: **All**, **Menu apps**, **Binaries**, **Built**.
+One search box matches name, generic name, keywords, binary name and binary path, case-insensitive, by substring. Results put matches at the start of the name first. With no search text, **All** lists the menu apps before the binaries. Filters: **All**, **Menu apps**, **Binaries**, **Built**.
 
 Discovery runs off the UI thread at start and again on "Refresh". It does not watch folders.
 
