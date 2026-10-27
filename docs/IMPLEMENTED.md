@@ -149,3 +149,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   Three random icons, a blue circle with F, a teal rounded square with C and a purple hexagon with É, each with the badge, viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** every icon starts with an XML declaration and Jailcat's header comment (SPEC §9.5's ownership check needs it). Of the system's icons, no hicolor app SVG uses `<style>`; 27% of breeze's do, all in the colour-scheme form now supported (SPEC §10.2 updated). Qt SVG rendering was not checked; only librsvg was available.
+
+## 3.2 Database (`internal/store`)
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-3.2-database
+- **Summary:** `internal/store` keeps builds and their installed files in SQLite through GORM, in english-tutor's pattern: the file is created with mode 0600, foreign keys are on for every connection, and the schema comes from numbered migrations with frozen structs (`001_init`). The API hands out plain `Build`, `Draft` and `InstalledFile` values; overrides are stored as firejail's versioned JSON and drafts as one JSON column. `RecordInstall` replaces a build's files in one transaction.
+- **Main files:** `internal/store/store.go`, `migrations.go`, `build.go`, `builds.go`, `files.go`, their tests.
+- **Tests:** every method on an in-memory and a file database; mode 0600; migrations applied twice; foreign keys on three pooled connections; unique sandbox name and installed path; cascade delete; an atomic `RecordInstall` that fails and keeps the old rows; overrides and drafts round trips; route tests for every tag, firejail's JSON errors passed back unwrapped.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:** none
+- **Manual checks:** none
+- **Deviations and follow-ups:** saving or clearing a draft does not change `UpdatedAt`. App kinds, icon modes and file kinds are constants but not checked on write.
