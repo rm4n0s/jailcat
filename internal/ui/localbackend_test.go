@@ -288,3 +288,50 @@ func TestKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalBackendProgramOnPath(t *testing.T) {
+	root := t.TempDir()
+	first, second := filepath.Join(root, "first"), filepath.Join(root, "second")
+	writeFile(t, filepath.Join(first, "plain"), "x", 0o644)
+	writeFile(t, filepath.Join(first, "tool"), "#!/bin/sh\n", 0o755)
+	writeFile(t, filepath.Join(second, "later"), "#!/bin/sh\n", 0o755)
+	writeFile(t, filepath.Join(root, "rel", "relative"), "#!/bin/sh\n", 0o755)
+	if err := os.MkdirAll(filepath.Join(first, "folder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(second, "later"), filepath.Join(first, "link")); err != nil {
+		t.Fatal(err)
+	}
+
+	sys := newSystem(t, true)
+	dirs := sys.dirs
+	dirs.Path = []string{first, "rel", "", second}
+	b, _ := sys.newBackendWith(t, dirs)
+
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	tests := []struct {
+		name string
+		ctx  context.Context
+		want bool
+	}{
+		{"tool", context.Background(), true},
+		{"later", context.Background(), true},
+		{"link", context.Background(), true},
+		{"plain", context.Background(), false},
+		{"folder", context.Background(), false},
+		{"missing", context.Background(), false},
+		{"relative", context.Background(), false},
+		{"", context.Background(), false},
+		{"../first/tool", context.Background(), false},
+		{"first/tool", context.Background(), false},
+		{"tool", cancelled, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := b.ProgramOnPath(tt.ctx, tt.name); got != tt.want {
+				t.Errorf("ProgramOnPath(%q) = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
+}

@@ -33,7 +33,8 @@ type EditorPageOpts struct {
 
 // EditorPage is the build editor of SPEC §6: the header, the profile selector, the row
 // of tabs with a dot on the ones that have changes, the body of the tab, the problems
-// and the buttons. It shows and changes an [Editor]. The Files tab is a [FilesTab]; the other
+// and the buttons. It shows and changes an [Editor]. The Files, Network, Devices and
+// Desktop tabs are [FilesTab], [NetworkTab], [DevicesTab] and [DesktopTab]; the other
 // bodies list the settings with their values for now.
 type EditorPage struct {
 	m.StatefulWidget
@@ -186,7 +187,7 @@ func (s *editorPageState) Build(bc m.BuildContext) m.Widget {
 	act := tabActions{
 		reset:  func(f firejail.Field) { s.SetState(func() { e.Reset(f) }) },
 		change: func(apply func()) { s.SetState(apply) },
-		logger: w.logger,
+		logger: w.logger, backend: w.backend,
 	}
 
 	children := []m.Widget{

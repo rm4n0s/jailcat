@@ -231,3 +231,21 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   VS Code on "code (firejail)" with Own private home chosen (its folder shown), an added `/mnt/projects`, `~/.config/Code` changed to read-only and the other profile rows; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** Own private home stores the absolute `<homes>/<sandbox name>`; renaming the sandbox in the Launcher tab must move it (step 4.6). The home folder itself can't be a row. The user's rows are listed before the profile's.
+
+## 4.4 Network, Devices and Desktop tabs
+
+- **Date:** 2026-10-27
+- **Branch:** feat/step-4.4-network-devices-desktop
+- **Summary:** The Network (Full/None, up to four DNS servers, hosts file through the chooser, firewall), Devices (nine checkboxes, checked = allowed) and Desktop (session D-Bus Full/Filtered/None with the five checkboxes and further talk/own names, system D-Bus, X11 isolation limited to installed programs) tabs of SPEC §7.2–§7.4, on shared tab helpers that the Files tab now uses too.
+- **Main files:** `internal/ui/networktab.go`, `devicestab.go`, `desktoptab.go`, `stringlist.go`, `tabparts.go`, their tests; `filestab.go` (moved onto the helpers), `backend.go`/`localbackend.go` (`ProgramOnPath`).
+- **Tests:** every control sets its field with dot, mark and Reset; disabled states and reasons; DNS and D-Bus name validation; X11 availability; the hosts file through the fake chooser; a base that filters the system bus; goldens `network-tab`, `devices-tab`, `desktop-tab` (and `editor` regenerated, viewed).
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests none · display tests none
+- **Proof:**
+  ![4.4 Network tab](implemented-proof-images/4.4-network.png)
+  Network Full, one DNS server added (changed, Reset), the hosts file field, the firewall switch with its namespace note; viewed by the manager.
+  ![4.4 Devices tab](implemented-proof-images/4.4-devices.png)
+  The device checkboxes with VS Code's profile values and Camera allowed (changed, Reset); viewed by the manager.
+  ![4.4 Desktop tab](implemented-proof-images/4.4-desktop.png)
+  Session D-Bus Filtered with Notifications checked and the further-names list; viewed by the manager.
+- **Manual checks:** none
+- **Deviations and follow-ups:** from `man firejail`: the firewall applies only with a network namespace of the sandbox's own, the X11 modes need one to close the abstract socket, and D-Bus filtering leaves abstract sockets reachable; Jailcat creates no namespace, so the fields say so (SPEC §7.2, §7.4 updated). `ProgramOnPath` takes a `ctx`. D-Bus names are checked more strictly in the UI than in `Validate`.

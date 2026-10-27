@@ -27,6 +27,9 @@ type Backend interface {
 	Firejail(ctx context.Context) (FirejailInfo, error)
 	// BinOnPath reports whether the folder the launchers go to is on $PATH (SPEC §3.1).
 	BinOnPath() bool
+	// ProgramOnPath reports whether an executable file called name is in one of the
+	// folders of $PATH (SPEC §7.4: the X11 isolation programs).
+	ProgramOnPath(ctx context.Context, name string) bool
 	// HomeDir returns the user's home folder, to recognize folders inside it.
 	HomeDir() string
 	// HomesDir returns the folder of Jailcat's private homes (SPEC §3.1).

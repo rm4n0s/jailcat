@@ -122,6 +122,8 @@ type tabActions struct {
 	change func(apply func())
 	// logger gets what the user must not read.
 	logger *slog.Logger
+	// backend answers what the system has, for the tabs that ask.
+	backend Backend
 }
 
 // settingsOfTab returns the fields shown in a tab, in the order of the table.
@@ -138,8 +140,15 @@ func settingsOfTab(tab firejail.Tab) []firejail.Field {
 // tabBody is the body of a tab: the list of its settings and their current values,
 // with a [ChangedMark] next to each one that differs from the base profile.
 func tabBody(bc m.BuildContext, e *Editor, tab firejail.Tab, act tabActions) m.Widget {
-	if tab == firejail.TabFiles {
+	switch tab {
+	case firejail.TabFiles:
 		return NewFilesTab(e, act.logger, act.change)
+	case firejail.TabNetwork:
+		return NewNetworkTab(e, act.logger, act.change)
+	case firejail.TabDevices:
+		return NewDevicesTab(e, act.change)
+	case firejail.TabDesktop:
+		return NewDesktopTab(e, act.backend, act.change)
 	}
 	var rows []m.Widget
 	if tab == TabExtraRules {

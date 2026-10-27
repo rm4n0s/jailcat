@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/rm4n0s/errors"
@@ -117,4 +119,26 @@ func (b *LocalBackend) Firejail(ctx context.Context) (FirejailInfo, error) {
 // BinOnPath reports whether the bin folder is one of the folders of $PATH.
 func (b *LocalBackend) BinOnPath() bool {
 	return xdg.OnPath(b.dirs, b.dirs.Bin)
+}
+
+// ProgramOnPath reports whether name is an executable regular file (a symbolic link is
+// followed) in one of the absolute folders of $PATH. A name with a path separator is not
+// a program name and is never found.
+func (b *LocalBackend) ProgramOnPath(ctx context.Context, name string) bool {
+	if name == "" || filepath.Base(name) != name {
+		return false
+	}
+	for _, dir := range b.dirs.Path {
+		if ctx.Err() != nil {
+			return false
+		}
+		if !filepath.IsAbs(dir) {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0 {
+			return true
+		}
+	}
+	return false
 }

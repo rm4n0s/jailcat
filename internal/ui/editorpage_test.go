@@ -218,8 +218,8 @@ func TestChangedDotAndMark(t *testing.T) {
 	if n := p.ts.Count(gluttertest.ByText(changedText)); n != 1 {
 		t.Fatalf("%d marks on the Network tab, want 1", n)
 	}
-	if !p.ts.Exists(gluttertest.ByText("none")) {
-		t.Error("the value of the setting is not shown")
+	if !p.ts.Exists(key("network:none")) || !p.ts.Exists(key("mark:network")) {
+		t.Error("the Network tab does not show the choice and its mark")
 	}
 
 	p.ts.Tap(gluttertest.ByText(resetText))

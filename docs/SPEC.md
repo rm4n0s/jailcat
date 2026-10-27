@@ -158,7 +158,7 @@ Default with **None**: Full home. With a base profile: what it sets (a `private`
 - **Network**: Full / None (`net none`). Default: Full
 - **DNS servers**: up to four addresses (`dns`; firejail ignores a fifth, `profile.c`). Default: system
 - **Hosts file**: a file to use as `/etc/hosts` (`hosts-file`). Default: system
-- **Firewall**: firejail's default client filter (`netfilter`). Default: off
+- **Firewall**: firejail's default client filter (`netfilter`). Default: off. Firejail applies it only to a sandbox with a network namespace of its own (`man firejail`, `--netfilter`), which Jailcat never creates (§1.1), so the field says so; it is kept because base profiles set it
 - DNS, hosts file and firewall are disabled while Network is None
 
 ### §7.3 Devices tab
@@ -189,7 +189,8 @@ Checkboxes, checked = allowed. Default with **None**: all allowed.
 
   plus a list of further names to talk to or own. Default: Full
 - **System D-Bus**: Full / None (`dbus-system none`). Default: Full
-- **X11 isolation**: Off / Xpra / Xephyr / Xvfb (`x11 xpra` …). Only the ones whose program is installed can be picked. Default: Off
+- **X11 isolation**: Off / Xpra / Xephyr / Xvfb (`x11 xpra` …). Only the ones whose program is installed can be picked. Default: Off. Firejail needs a network namespace to close the X11 abstract socket in these modes (`man firejail`, `--x11`), which Jailcat does not create, so the field says so
+- Filtering the D-Bus handles only the regular bus sockets; abstract sockets stay reachable without a network namespace (`man firejail`, `--dbus-user`)
 
 ### §7.5 Security tab
 Default with **None** in parentheses.

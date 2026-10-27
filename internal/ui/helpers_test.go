@@ -73,6 +73,10 @@ type fakeBackend struct {
 	gate chan struct{}
 	// scans counts the calls of ScanApps.
 	scans int
+	// programs maps a program name to whether ProgramOnPath finds it; programAsks lists
+	// the names it was asked for.
+	programs    map[string]bool
+	programAsks []string
 
 	// fj answers ProfileChoices, ReadBase and ImportProfile from the fixture folders of
 	// firejail (the real code of [LocalBackend], no database).
@@ -143,6 +147,14 @@ func (f *fakeBackend) Firejail(context.Context) (FirejailInfo, error) {
 }
 
 func (f *fakeBackend) BinOnPath() bool { return f.binOnPath }
+
+// ProgramOnPath answers from the programs map; a program that is not in it is missing.
+func (f *fakeBackend) ProgramOnPath(_ context.Context, name string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.programAsks = append(f.programAsks, name)
+	return f.programs[name]
+}
 
 // testIcon returns an icon of testdata/icons.
 func testIcon(t *testing.T, file string, format icons.Format) icons.Icon {
@@ -217,6 +229,8 @@ func fixtureBackend(t *testing.T) *fakeBackend {
 			{ID: 3, SandboxName: "firejail-code", AppKind: store.AppKindDesktop, DesktopFileID: "Visual Studio Code.desktop", BuiltAt: &built},
 		},
 		firejail: FirejailInfo{Path: "/usr/bin/firejail", Version: "0.9.80"},
+		// Xpra and Xvfb are installed, Xephyr is not.
+		programs: map[string]bool{"xpra": true, "Xvfb": true},
 		icons: map[string]icons.Icon{
 			"blue":   testIcon(t, "blue.svg", icons.FormatSVG),
 			"green":  testIcon(t, "green.svg", icons.FormatSVG),

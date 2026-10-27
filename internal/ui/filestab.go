@@ -228,9 +228,7 @@ func (s *filesTabState) Build(bc m.BuildContext) m.Widget {
 	e := s.Widget().editor
 	final := e.Final()
 	children := []m.Widget{s.homeSection(bc, e, final), s.foldersSection(bc, e, final), s.togglesSection(bc, e, final)}
-	return m.NewScrollbar(m.NewListView(children, m.ListViewOpts{
-		Key: m.NewValueKey("body:" + string(firejail.TabFiles)), Controller: s.scroll, Padding: m.NewEdgeInsetsSymmetric(8, 16),
-	}), m.ScrollbarOpts{Controller: s.scroll})
+	return tabList(firejail.TabFiles, s.scroll, children)
 }
 
 // sectionTitle is the heading of a section, with the mark when the section changed.
@@ -267,7 +265,7 @@ func (s *filesTabState) homeSection(bc m.BuildContext, e *Editor, final firejail
 		if mode == firejail.HomePrivate {
 			text = "Its own home, kept between runs: " + displayPlainPath(e.PrivateHomePath(), e.home)
 		}
-		return s.homeTile(bc, mode, title, text, final.Home == mode)
+		return radioTile(bc, "home:"+string(mode), mode, title, text, final.Home == mode, true)
 	}
 	grid := m.NewColumn([]m.Widget{
 		m.NewIntrinsicHeight(m.NewRow([]m.Widget{m.NewExpanded(tile(firejail.HomeFull)), m.NewExpanded(tile(firejail.HomeChosen))}, m.RowOpts{CrossAxisAlignment: m.CrossAxisAlignmentStretch})),
@@ -289,25 +287,6 @@ func (s *filesTabState) homeSection(bc m.BuildContext, e *Editor, final firejail
 		m.NewSizedBox(nil, m.SizedBoxOpts{Height: m.Some(8.0)}),
 		group,
 	}, m.ColumnOpts{CrossAxisAlignment: m.CrossAxisAlignmentStretch})
-}
-
-// homeTile is one choice of the home folder.
-func (s *filesTabState) homeTile(bc m.BuildContext, mode firejail.HomeMode, title, text string, selected bool) m.Widget {
-	theme := m.ThemeOf(bc)
-	scheme := theme.ColorScheme
-	side := m.NewBorderSide(m.BorderSideOpts{Color: m.Some(scheme.OutlineVariant())})
-	if selected {
-		side = m.NewBorderSide(m.BorderSideOpts{Color: m.Some(scheme.Primary()), Width: m.Some(2.0)})
-	}
-	return m.NewPadding(m.NewEdgeInsetsAll(4), m.NewRadioListTile(mode, m.RadioListTileOpts[firejail.HomeMode]{
-		Key:               m.NewValueKey("home:" + string(mode)),
-		Title:             m.NewText(title, m.TextOpts{Style: theme.TextTheme.TitleSmall}),
-		Subtitle:          m.NewText(text, m.TextOpts{Style: theme.TextTheme.BodySmall, MaxLines: m.Some(3), Overflow: m.TextOverflowEllipsis}),
-		Dense:             m.Some(true),
-		Selected:          selected,
-		SelectedTileColor: m.Some(scheme.SecondaryContainer()),
-		Shape:             m.NewRoundedRectangleBorder(m.RoundedRectangleBorderOpts{Side: side, BorderRadius: m.NewBorderRadiusCircular(12)}),
-	}))
 }
 
 // foldersHint explains the folder list for the home choice.
@@ -495,14 +474,12 @@ func (s *filesTabState) togglesSection(bc m.BuildContext, e *Editor, final firej
 				text, onChanged = downloadsOffReason, nil
 			}
 		}
-		var title m.Widget = m.NewText(settingLabel(t.field))
+		var mark m.Widget
 		if e.Changed(t.field) {
 			field := t.field
-			title = m.NewRow([]m.Widget{
-				m.NewText(settingLabel(t.field)), m.NewSizedBox(nil, m.SizedBoxOpts{Width: m.Some(12.0)}),
-				NewChangedMark(func() { s.apply(func(e *Editor) { e.Reset(field) }) }, ChangedMarkOpts{Key: m.NewValueKey("mark:" + string(field))}),
-			}, m.RowOpts{MainAxisSize: m.MainAxisSizeMin, CrossAxisAlignment: m.CrossAxisAlignmentCenter})
+			mark = NewChangedMark(func() { s.apply(func(e *Editor) { e.Reset(field) }) }, ChangedMarkOpts{Key: m.NewValueKey("mark:" + string(field))})
 		}
+		title := markedTitle(settingLabel(t.field), mark)
 		col = append(col, m.NewSwitchListTile(on, onChanged, m.SwitchListTileOpts{
 			Key:      m.NewValueKey("toggle:" + string(t.field)),
 			Title:    title,
