@@ -40,6 +40,7 @@ All folders come from `internal/xdg`, resolved once at start from the environmen
 | Database | `<data>/jailcat.db` |
 | Profiles | `<data>/profiles/` (generated), `<data>/profiles/imported/` (imported, §6.1) |
 | Private homes | `<data>/homes/<sandbox name>/` |
+| VS Code data | `<data>/appdata/<sandbox name>/` (§7.1, VS Code) |
 | Cache | `$XDG_CACHE_HOME/jailcat` (default `~/.cache/jailcat`); Try's temporary profiles (§11.2) |
 | Bin | `$XDG_BIN_HOME` if set, else `~/.local/bin` |
 | Applications | `$XDG_DATA_HOME/applications` |
@@ -47,7 +48,7 @@ All folders come from `internal/xdg`, resolved once at start from the environmen
 | Firejail system config | `/etc/firejail` (firejail's `${CFG}`) |
 | Firejail user config | `$HOME/.config/firejail`, always: firejail ignores `$XDG_CONFIG_HOME` (`profile.c`) |
 
-Jailcat creates its folders with mode `0700` (data, homes) or `0755` (the rest) when they are missing. If the bin folder is not on `$PATH`, the Launcher tab says so.
+Jailcat creates its folders with mode `0700` (data, homes, appdata) or `0755` (the rest) when they are missing. If the bin folder is not on `$PATH`, the Launcher tab says so.
 
 ### §3.2 Jailcat in the application menu (`-setup-desktop`)
 `jailcat -setup-desktop` adds Jailcat itself to the desktop's application menu and exits, without opening the window, the log or the database (the owner's request, 2026-10-27, like english-tutor's flag of the same name). It writes, under `$XDG_DATA_HOME` (`~/.local/share` when unset or not absolute):
@@ -152,6 +153,13 @@ Default with **None**: Full home. With a base profile: what it sets (a `private`
 - With **Only the folders I choose**, the folders the base profile allows under the home (its `noblacklist`/`whitelist` lines, e.g. `~/.config/Code` and `~/.vscode` for VS Code) are listed as Read-write rows from the profile, so the app keeps its own settings
 - With **Own private home** and **Empty home**, the real home stays out of the sandbox completely (the owner's decision, 2026-10-27): the folder list accepts only folders outside the home (`/mnt/data`, `/opt/projects`), and the chooser's answer inside the real home is refused with a message that says so. Rows from the base profile stay: inside a private home `${HOME}` is the private home, so `${HOME}/.config/Code` names the app's own folder there, not the real one
 
+**VS Code** (shown only for a VS Code app: the binary's base name is `code`, `code-insiders`, `code-oss`, `codium`, `codium-insiders` or `vscodium`; its config folder is `~/.config/` plus `Code`, `Code - Insiders`, `Code - OSS`, `VSCodium`, `VSCodium - Insiders`, `VSCodium` in that order). VS Code runs one instance per data folder: a second `code` finds the first through a socket in `/run/user/<uid>` named after its data folder, hands its window over and exits. A sandboxed VS Code with the user's own data folder therefore opens its window in the user's open VS Code, outside the sandbox, whatever the sandbox allows (found by the owner in 1.0.0). These switches give the sandboxed VS Code what the owner's `lcode` script gives it (2026-10-28):
+- **Own VS Code data folder** (on): the launcher passes `--user-data-dir <data>/appdata/<sandbox name>` (§9.2), so the sandboxed VS Code is an instance of its own. Window state, recent files and extension logins are per build. With Full home and Only the folders I choose, Jailcat creates the folder at Build and Try (mode `0700`). With Empty home and Own private home it does not: inside the sandbox the same path names a folder of the sandbox's own home, which VS Code creates there
+- **Share settings with my VS Code** (on): the data folder's `User/settings.json`, `User/keybindings.json` and `User/snippets` are symbolic links to the same names in the config folder's `User/`, so the sandbox looks and behaves like the user's VS Code. Jailcat makes a link at Build and Try when its target exists and nothing is at the link's path, and removes the links it made (a link whose target is exactly that file) when the switch is off. Extensions are shared without anything from Jailcat: VS Code keeps them in its own folder under the home (`~/.vscode/extensions` for `code`) whatever the data folder, and firejail's profiles for VS Code let the app see that folder. Needs Full home or Only the folders I choose; otherwise it is off and disabled, with the reason (the real home stays out of a private home)
+- **Shell files for the terminal** (on): for the integrated terminal, the sandbox sees the shell startup files read-only (not as rows of the folder list: `.bashrc`, `.bash_profile`, `.bash_login`, `.profile`, `.bash_aliases`, `.inputrc`, `.bash_completion`, `.local/share/bash-completion`, `.zshenv`, `.zprofile`, `.zshrc`, `.zlogin`, `.config/fish`, `.config/starship.toml` under `${HOME}`), and Tab completion is kept (`tab`: firejail turns it off in a sandbox with a restricted home by writing its own `~/.inputrc`; `man firejail`, `--tab`, accepted in profiles by `profile.c`). Firejail skips a `whitelist` or `read-only` line whose path does not exist, so the list is written whole. Anything these files export (API keys) is visible in the sandbox; the switch says so. Needs Only the folders I choose; otherwise it is off and disabled
+
+These are Jailcat's own settings, not firejail lines of the base profile: their base value is the value for a new build of the app (on for a VS Code app), like the launcher fields of §7.8.
+
 **Quick toggles**: Downloads read-write (`${DOWNLOADS}`), Hide removable drives (`disable-mnt`), No programs from home (`noexec ${HOME}`), Private `/tmp` (`private-tmp`), Private `/dev` (`private-dev`), Private cache (`private-cache`).
 
 ### §7.2 Network tab
@@ -220,7 +228,7 @@ All off by default.
 - Maximum open files (`rlimit-nofile`), maximum processes (`rlimit-nproc`)
 
 ### §7.8 Launcher tab
-- **Sandbox name**: default `firejail-<binary name>`, sanitized to `[a-z0-9-]`; for a second build of the same app, `-2`, `-3`…; a typed name is stored only once it is valid and no other build has it; renaming moves an Own private home that sits at its default `<homes>/<name>`, and Build removes an installed build's old files
+- **Sandbox name**: default `firejail-<binary name>`, sanitized to `[a-z0-9-]`; for a second build of the same app, `-2`, `-3`…; a typed name is stored only once it is valid and no other build has it; renaming moves an Own private home that sits at its default `<homes>/<name>` and the VS Code data folder, and Build removes an installed build's old files
 - **Menu name**: default "<app name> (sandboxed)"; **Comment**: default the app's comment
 - **Icon**: App icon with badge / Random (with **New random icon**) (§10)
 - **Install in the menu** (on), **Install in the bin folder** (on); at least one must be on
@@ -306,6 +314,9 @@ include /etc/firejail/code.profile
   | Home: Empty home | `private`. Downloads read-write is refused with an empty or private home: the Downloads folder is in the real home |
   | Home: Own private home | `private ${HOME}/.local/share/jailcat/homes/<sandbox name>` (the real path, written with `${HOME}` when under the home), `ignore mkdir` and `ignore mkfile`: with a private home the `mkdir` and `mkfile` lines of the base profile would still make folders and files in the real home (`man firejail-profile`, under `private directory`) |
   | Home: Full home, with a base that restricts the home | `ignore` for each `private` and home `whitelist` line of the base |
+  | VS Code: Own VS Code data folder | the lines of a Read-write folder row for the data folder (`noblacklist`, and `whitelist` with Only the folders I choose); none with Empty home and Own private home |
+  | VS Code: Share settings | the lines of a Read-write folder row for each of the three targets in the config folder's `User/` |
+  | VS Code: Shell files for the terminal | `tab`, and the lines of a Read-only folder row for each shell startup file |
 
 - How `ignore` lines are written (the matching rule is in §8.1):
   - an `ignore` repeats the base line's text exactly as firejail normalizes it, macros as written in the base profile
@@ -323,6 +334,7 @@ exec '/usr/bin/firejail' '--profile=/home/rmanos/.local/share/jailcat/profiles/f
 - Absolute paths of firejail and of the app's binary, resolved at Build. Every word is in POSIX single quotes
 - `--` ends firejail's options, so the app's arguments are never read as firejail options
 - Extra arguments (§7.6) go between the binary and `"$@"`
+- With **Own VS Code data folder** (§7.1), `'--user-data-dir' '<data>/appdata/<sandbox name>'` (the absolute path) comes right after the binary, before the extra arguments
 
 ### §9.3 Desktop entry: `<applications>/<sandbox name>.desktop`
 ```ini
@@ -378,13 +390,13 @@ Jailcat's window draws icons with Glutter's `svg` package (v1.9.0): `svg.NewSvgP
 A dialog with read-only tabs: Profile, Launcher, Desktop entry. Lines that come from overrides and Extra rules are highlighted.
 
 ### §11.2 Try
-- Writes the profile to `<cache>/try/<sandbox name>.profile` and runs `firejail --profile=<that file> --name=jailcat-try-<sandbox name> -- <binary> <extra arguments>` off the UI thread. Nothing is installed and the database is not changed (a private home folder is created if the build needs one)
+- Writes the profile to `<cache>/try/<sandbox name>.profile` and runs `firejail --profile=<that file> --name=jailcat-try-<sandbox name> -- <binary> <extra arguments>` off the UI thread. Nothing is installed and the database is not changed (a private home folder and the VS Code data folder with its links are created if the build needs them). The VS Code data folder is the build's own, so a Try and the installed build share it
 - A panel shows firejail's output as it comes, and a **Stop** button (`firejail --shutdown=jailcat-try-<sandbox name>`). Closing Jailcat stops a running Try
 
 ### §11.3 Build
 1. Validate the settings and Extra rules; resolve firejail's and the binary's paths
 2. Check the targets (§9.5)
-3. Write the profile, the launcher, the icon, the desktop entry; create the private home folder if needed
+3. Write the profile, the launcher, the icon, the desktop entry; create the private home folder and the VS Code data folder (with its links, §7.1) if needed
 4. Record the files, the firejail version and the time in the database
 5. Check: run the installed launcher's command with `true` in place of the app (`firejail --profile=… -- true`) and show a warning with firejail's output if it fails. There is no `--quiet` on this command line: with it firejail does not print its warning "an existing sandbox was detected", which the check must see (the profile's own `quiet` line already silences firejail's banner). For a build with "Only these programs" (`private-bin`), where `true` might not be in the sandbox, the command is `firejail --ignore=private-bin --profile=… -- true`. That command-line ignore counts toward firejail's limit of 32 `ignore` entries (§9.1): if the build already has 32, the check is skipped and the reason is shown in place of the result
 
@@ -414,9 +426,9 @@ One SQLite file (§3.1), opened in `cmd/jailcat`, used only through `internal/st
 |---|---|---|
 | ID | uint | |
 | BuildID | uint | foreign key |
-| Kind | string | `profile`, `launcher`, `desktop`, `icon`, `home` |
+| Kind | string | `profile`, `launcher`, `desktop`, `icon`, `home`, `appdata` |
 | Path | string | unique |
-| SHA256 | string | empty for `home` |
+| SHA256 | string | empty for `home` and `appdata` |
 
 - Overrides are stored as JSON, not as tables: the set of fields grows with firejail, and the store never queries inside it. The JSON has a `version` field; reading an older version upgrades it in `internal/store`
 - The schema is made only by numbered migrations, applied in order, each in its own transaction, and recorded by ID in a `schema_migrations` table. Each migration uses its own frozen copy of the table structs, so a later change to a model cannot rewrite history (english-tutor's `internal/store/migrations.go` does this). A migration is never edited or reordered once released, and a released database must open in every later version
@@ -428,7 +440,7 @@ One SQLite file (§3.1), opened in `cmd/jailcat`, used only through `internal/st
 Opening a build computes base values from the base profile as it is now, then applies the stored overrides. Build regenerates every file from the database (§11.3).
 
 ### §13.2 Uninstall
-Removes every recorded file of the build whose SHA-256 still matches; a file that was edited since is listed and left in place unless the user confirms. The private home folder is removed only if the user ticks "Also delete its private home" (off by default). Then the build is removed from the database, or kept as "not installed" if the user chooses **Keep settings**; a build kept that way shows in the list as a draft (§5), not as built.
+Removes every recorded file of the build whose SHA-256 still matches; a file that was edited since is listed and left in place unless the user confirms. The private home folder is removed only if the user ticks "Also delete its private home" (off by default), and the VS Code data folder only if the user ticks "Also delete its VS Code data" (off by default). Then the build is removed from the database, or kept as "not installed" if the user chooses **Keep settings**; a build kept that way shows in the list as a draft (§5), not as built.
 
 ### §13.3 Firejail updates
 A build includes its base profile by path, so firejail's fixes reach the sandbox at its next start without a rebuild. If the base profile file is gone, the build is marked "base profile missing" and its editor asks for another one. When the firejail version differs from the build's `FirejailVersion`, the build list shows "firejail updated" and Extra rules are checked again.
