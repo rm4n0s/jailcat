@@ -301,3 +301,15 @@ Copy this block, fill it in, and keep every heading. Write "none" where somethin
   The real app on a scratch home after a real `LocalBackend` build of Calculator (with a fake firejail in the scratch home): Calculator shows "built"; viewed by the manager.
 - **Manual checks:** none
 - **Deviations and follow-ups:** a new build's Preview shows `jailcat-build: 0` until it is stored; Build regenerates with the real ID. Only installed builds count as "built"; one uninstalled with its settings kept shows "draft" (SPEC §13.2 updated). Build and Uninstall finish even if the page goes away. A failed first Build deletes its new row; partly written files then show as overwritable Jailcat files.
+
+## 5.1 Release 1.0
+
+- **Date:** 2026-10-28
+- **Branch:** feat/step-5.1-release
+- **Summary:** Jailcat 1.0: the README (what it does, install with `go install` and `-setup-desktop`, how a build works, the four files it writes, development), and Glutter upgraded from v1.9.0 to v1.9.4 (fixes only: gestures, keyboard, memory leaks, the UI-goroutine check, long lists). Released as `v1.0.0`.
+- **Main files:** `README.md`, `go.mod`, `go.sum`.
+- **Tests:** the whole suite on Glutter v1.9.4; every golden image still matches.
+- **Checks:** gofmt ✅ · go vet ✅ · golangci-lint ✅ · go test -race ✅ · firejail tests **not run on this commit**: this session ran inside Claude Code's sandbox, where firejail refuses to sandbox and the tests fail on purpose. They last passed in full on step 4.7 (Glutter v1.9.0); the Glutter upgrade changes only the window, not what a build writes · display tests none
+- **Proof:** none (the user-desktop screenshots `5.1-menu.png` and `5.1-running.png` were not taken)
+- **Manual checks:** **not done.** The owner asked to publish once the work was finished (2026-10-28) before doing the step's manual checks on the real desktop (menu entry and icon, the running sandboxed VS Code with its taskbar grouping, `firejail-code` from bash, Uninstall removing the entry). They remain to be done on the released version.
+- **Deviations and follow-ups:** run `go test -tags jailcat_firejail ./...` outside a sandbox on this release, and the manual checks above; a fix found by either goes into a 1.0.x patch.

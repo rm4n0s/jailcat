@@ -14,8 +14,8 @@ github.com/mattn/go-sqlite3 v1.14.22 h1:2gZY6PC6kBnID23Tichd1K+Z0oS6nE/XwU+Vz/5o
 github.com/mattn/go-sqlite3 v1.14.22/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/rm4n0s/errors v0.2.0 h1:IM8Ug6x0ylxcWaH1P0vl79qiTM6pJb3DTe+9lBT83+0=
 github.com/rm4n0s/errors v0.2.0/go.mod h1:i/xNeA3IMMgyVwttn7tC4nny2Vqgff18R0rKevqSx8E=
-github.com/rm4n0s/glutter v1.9.0 h1:wxQTP/vGUeyjPcaofjqFAOqf/pHcZFbOeevacjkdYoY=
-github.com/rm4n0s/glutter v1.9.0/go.mod h1:7qG+8cWByltX/yOzrOYXK+APoZsWi7BId3ZIQt4o74w=
+github.com/rm4n0s/glutter v1.9.4 h1:nYDL/sBnYFH+GJCugD0diUZdqhY/ifJ6Mt2I92EaKbw=
+github.com/rm4n0s/glutter v1.9.4/go.mod h1:7qG+8cWByltX/yOzrOYXK+APoZsWi7BId3ZIQt4o74w=
 golang.org/x/image v0.47.0 h1:za/8gVz++PPZqmZJBNSISICN5Rrj5zixP/8K++fgmqo=
 golang.org/x/image v0.47.0/go.mod h1:IkN5o4A7vq55vXN8FWjjnhg9Rs2GOtffqsSi9mWAKYE=
 golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=

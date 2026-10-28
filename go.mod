@@ -4,7 +4,7 @@ go 1.27
 
 require (
 	github.com/rm4n0s/errors v0.2.0
-	github.com/rm4n0s/glutter v1.9.0
+	github.com/rm4n0s/glutter v1.9.4
 	golang.org/x/image v0.47.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
