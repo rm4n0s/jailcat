@@ -15,6 +15,7 @@ func filesOf(dir string) []InstalledFile {
 		{Kind: FileKindDesktop, Path: dir + "/applications/x.desktop", SHA256: "33"},
 		{Kind: FileKindIcon, Path: dir + "/icons/x.svg", SHA256: "44"},
 		{Kind: FileKindHome, Path: dir + "/homes/x"},
+		{Kind: FileKindAppData, Path: dir + "/appdata/x"},
 	}
 }
 

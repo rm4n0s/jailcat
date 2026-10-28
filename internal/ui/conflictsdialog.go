@@ -55,8 +55,11 @@ func conflictKindText(c install.Conflict, owner string) string {
 	case install.ConflictForeignJailcat:
 		return "This file says Jailcat made it, but no build here owns it."
 	}
-	if c.File.Kind == install.KindHome {
+	switch c.File.Kind {
+	case install.KindHome:
 		return "A file stands where the private home folder should be."
+	case install.KindAppData:
+		return "A file stands where the VS Code data folder should be."
 	}
 	return "This file already exists, and Jailcat did not make it."
 }
@@ -74,6 +77,8 @@ func conflictKindName(k install.Kind) string {
 		return "Icon"
 	case install.KindHome:
 		return "Private home"
+	case install.KindAppData:
+		return "VS Code data"
 	}
 	return string(k)
 }

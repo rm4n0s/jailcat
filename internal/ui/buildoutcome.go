@@ -95,6 +95,9 @@ func newUninstalledOutcome(name string, res install.UninstallResult, home string
 	if res.HomeKept {
 		o.notes = append(o.notes, uninstallHomeKeptText+"its files are still in the private homes folder.")
 	}
+	if res.AppDataKept {
+		o.notes = append(o.notes, uninstallAppDataKeptText+"its files are still in the appdata folder.")
+	}
 	return o
 }
 

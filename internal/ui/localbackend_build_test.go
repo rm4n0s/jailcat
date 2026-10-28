@@ -138,6 +138,13 @@ func TestLocalBackendBuildNewBuild(t *testing.T) {
 	kinds := map[string]bool{}
 	for _, f := range recorded {
 		kinds[f.Kind] = true
+		if f.Kind == store.FileKindAppData {
+			// A folder: the VS Code data folder, made with the build's defaults for VS Code.
+			if info, err := os.Stat(f.Path); err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 || f.SHA256 != "" {
+				t.Errorf("the data folder: %v, %v, %q", info, err, f.SHA256)
+			}
+			continue
+		}
 		data, err := os.ReadFile(f.Path)
 		if err != nil {
 			t.Fatal(err)
@@ -156,7 +163,7 @@ func TestLocalBackendBuildNewBuild(t *testing.T) {
 			t.Errorf("%s has the header of build 0", f.Path)
 		}
 	}
-	for _, kind := range []string{store.FileKindProfile, store.FileKindLauncher, store.FileKindDesktop, store.FileKindIcon} {
+	for _, kind := range []string{store.FileKindProfile, store.FileKindLauncher, store.FileKindDesktop, store.FileKindIcon, store.FileKindAppData} {
 		if !kinds[kind] {
 			t.Errorf("no %s is recorded", kind)
 		}
@@ -235,10 +242,18 @@ func TestLocalBackendRenameRemovesTheOldFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(res.Removed) != len(first.Files) {
-		t.Errorf("Removed = %d files, want %d", len(res.Removed), len(first.Files))
+	// The VS Code data folder is not a file Build removes: like a private home it is kept,
+	// and the build now has a data folder named like the new sandbox.
+	if len(res.Removed) != len(first.Files)-1 {
+		t.Errorf("Removed = %d files, want %d", len(res.Removed), len(first.Files)-1)
 	}
 	for _, f := range first.Files {
+		if f.Kind == install.KindAppData {
+			if _, err := os.Stat(f.Path); err != nil {
+				t.Errorf("the old data folder was removed: %v", err)
+			}
+			continue
+		}
 		if _, err := os.Stat(f.Path); !os.IsNotExist(err) {
 			t.Errorf("the old file %s is still there: %v", f.Path, err)
 		}
@@ -254,6 +269,9 @@ func TestLocalBackendRenameRemovesTheOldFiles(t *testing.T) {
 		if !strings.Contains(f.Path, "firejail-vscode") {
 			t.Errorf("an old file is still recorded: %s", f.Path)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(bs.sys.dirs.AppData, "firejail-vscode")); err != nil {
+		t.Errorf("the data folder of the new name: %v", err)
 	}
 	renamed, err := bs.store.GetBuild(ctx, first.Build.ID)
 	if err != nil || renamed.SandboxName != "firejail-vscode" {

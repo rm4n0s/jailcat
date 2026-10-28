@@ -19,16 +19,24 @@ type LauncherSpec struct {
 	Profile string
 	// Binary is the absolute, clean path of the app's executable.
 	Binary string
-	// ExtraArgs are the words that go between the binary and the user's arguments
-	// (SPEC §7.6).
+	// UserDataDir is the absolute, clean path of the VS Code data folder of the build
+	// (SPEC §7.1): "--user-data-dir" and the path go right after the binary. Empty for
+	// an app that is not VS Code, or a build without its own data folder.
+	UserDataDir string
+	// ExtraArgs are the words that go between the binary (and the VS Code data folder)
+	// and the user's arguments (SPEC §7.6).
 	ExtraArgs []string
 }
 
+// UserDataDirFlag is the option that gives a VS Code its own data folder (SPEC §7.1).
+const UserDataDirFlag = "--user-data-dir"
+
 // WriteLauncher writes the launcher script of SPEC §9.2 to w: the "#!/bin/sh" line, the
 // header, and an "exec" of firejail with "--profile=<profile>", "--", the binary, the
-// extra arguments and "$@". Every word goes through [ShellQuote]; "$@" is written as is,
-// so the user's arguments arrive unchanged. The script is built whole and written with
-// one call, so an error leaves w untouched; the file ends with a newline.
+// optional "--user-data-dir <folder>", the extra arguments and "$@". Every word goes
+// through [ShellQuote]; "$@" is written as is, so the user's arguments arrive unchanged.
+// The script is built whole and written with one call, so an error leaves w untouched;
+// the file ends with a newline.
 func WriteLauncher(w io.Writer, spec LauncherSpec) error {
 	if !isCleanAbs(spec.Firejail) {
 		return errors.New(tagLauncherFirejailInvalid, "the path of firejail is not absolute and clean",
@@ -43,6 +51,11 @@ func WriteLauncher(w io.Writer, spec LauncherSpec) error {
 			"path", spec.Binary)
 	}
 
+	if spec.UserDataDir != "" && !isCleanAbs(spec.UserDataDir) {
+		return errors.New(tagLauncherDataDirInvalid, "the path of the VS Code data folder is not absolute and clean",
+			"path", spec.UserDataDir)
+	}
+
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
 	for _, line := range Header(spec.BuildID) {
@@ -51,6 +64,9 @@ func WriteLauncher(w io.Writer, spec LauncherSpec) error {
 	b.WriteString("exec")
 	// "--" has nothing to quote and is written as is, the way SPEC §9.2 shows it.
 	words := []string{spec.Firejail, "--profile=" + spec.Profile, "", spec.Binary}
+	if spec.UserDataDir != "" {
+		words = append(words, UserDataDirFlag, spec.UserDataDir)
+	}
 	words = append(words, spec.ExtraArgs...)
 	for i, word := range words {
 		if i == 2 {
@@ -80,5 +96,6 @@ const (
 	tagLauncherFirejailInvalid = "LauncherFirejailInvalid"
 	tagLauncherProfileInvalid  = "LauncherProfileInvalid"
 	tagLauncherBinaryInvalid   = "LauncherBinaryInvalid"
+	tagLauncherDataDirInvalid  = "LauncherDataDirInvalid"
 	tagLauncherWriteFailed     = "LauncherWriteFailed"
 )

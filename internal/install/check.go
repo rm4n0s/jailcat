@@ -72,8 +72,8 @@ const headerScanLines = 6
 //   - not recorded, with Jailcat's header: [ConflictForeignJailcat]
 //   - anything else, including a folder or a link in place of the file: [ConflictForeign]
 //
-// A private home folder that exists is fine, because it is kept between builds; a file
-// in its place is a [ConflictForeign]. A nil owner means that no path is recorded.
+// A private home folder or VS Code data folder that exists is fine, because it is kept
+// between builds; a file in its place is a [ConflictForeign]. A nil owner means that no path is recorded.
 func Check(ctx context.Context, p *Prepared, owner OwnerFunc) ([]Conflict, error) {
 	var out []Conflict
 	for _, f := range p.Files {
@@ -100,7 +100,7 @@ func checkFile(buildID int64, f File, owner OwnerFunc) (c Conflict, found bool, 
 	if err != nil {
 		return Conflict{}, false, errors.NewErr(tagTargetStatFailed, err).SetMetadata("path", f.Path)
 	}
-	if f.Kind == KindHome {
+	if f.Kind == KindHome || f.Kind == KindAppData {
 		if info.IsDir() {
 			return Conflict{}, false, nil
 		}

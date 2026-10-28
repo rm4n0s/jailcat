@@ -86,6 +86,8 @@ type TrySession interface {
 type UninstallChoice struct {
 	// DeleteHome also removes the private home folder.
 	DeleteHome bool
+	// DeleteAppData also removes the VS Code data folder.
+	DeleteAppData bool
 	// KeepSettings keeps the build in the database as "not installed"; off removes it.
 	KeepSettings bool
 	// Force lists the paths of edited files to remove anyway.

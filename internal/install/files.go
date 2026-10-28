@@ -22,21 +22,24 @@ const (
 	KindIcon Kind = "icon"
 	// KindHome is the build's private home folder; it has no content and no SHA-256.
 	KindHome Kind = "home"
+	// KindAppData is the build's VS Code data folder (SPEC §7.1); it has no content and
+	// no SHA-256.
+	KindAppData Kind = "appdata"
 )
 
-// File is one file (or, for [KindHome], one folder) a build installs.
+// File is one file (or, for [KindHome] and [KindAppData], one folder) a build installs.
 type File struct {
 	// Kind says what the file is.
 	Kind Kind
 	// Path is the absolute path of the target.
 	Path string
-	// Content is what is written; nil for [KindHome]. A [File] that [Install] or
+	// Content is what is written; nil for [KindHome] and [KindAppData]. A [File] that [Install] or
 	// [Uninstall] returns has no Content.
 	Content []byte
 	// Mode is the mode the file is given: 0644 for a profile, a desktop entry and an
-	// icon, 0755 for a launcher, 0700 for a private home.
+	// icon, 0755 for a launcher, 0700 for a private home and a VS Code data folder.
 	Mode os.FileMode
-	// SHA256 is the hex SHA-256 of Content; "" for [KindHome].
+	// SHA256 is the hex SHA-256 of Content; "" for [KindHome] and [KindAppData].
 	SHA256 string
 }
 
@@ -52,10 +55,12 @@ func installRank(k Kind) int {
 		return 2
 	case KindHome:
 		return 3
-	case KindDesktop:
+	case KindAppData:
 		return 4
+	case KindDesktop:
+		return 5
 	}
-	return 5
+	return 6
 }
 
 // uninstallRank is the order [Uninstall] removes the kinds in: the desktop entry first,
@@ -72,8 +77,10 @@ func uninstallRank(k Kind) int {
 		return 3
 	case KindHome:
 		return 4
+	case KindAppData:
+		return 5
 	}
-	return 5
+	return 6
 }
 
 // validSandboxName reports whether name is a non-empty name of the characters [a-z0-9-],

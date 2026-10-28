@@ -227,7 +227,11 @@ func (s *filesTabState) typePath() {
 func (s *filesTabState) Build(bc m.BuildContext) m.Widget {
 	e := s.Widget().editor
 	final := e.Final()
-	children := []m.Widget{s.homeSection(bc, e, final), s.foldersSection(bc, e, final), s.togglesSection(bc, e, final)}
+	children := []m.Widget{s.homeSection(bc, e, final), s.foldersSection(bc, e, final)}
+	if e.IsVSCode() {
+		children = append(children, s.vscodeSection(bc, e, final))
+	}
+	children = append(children, s.togglesSection(bc, e, final))
 	return tabList(firejail.TabFiles, s.scroll, children)
 }
 

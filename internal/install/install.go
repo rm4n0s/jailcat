@@ -19,11 +19,13 @@ import (
 // looked at it cannot overwrite anything: a target whose conflict is not overwritable,
 // or whose path is not set in allowOverwrite (the paths the user confirmed), stops the
 // install with [TagConflictsRemain] before anything is written. Then it creates the
-// missing folders (0755; Jailcat's data and homes folders 0700), and writes the files in
-// this order: profile, launcher, icon, the private home, and the desktop entry last, so
-// the menu never shows an entry whose launcher, icon or home is missing. Each file goes to
+// missing folders (0755; Jailcat's data, homes and appdata folders 0700), and writes the
+// files in this order: profile, launcher, icon, the private home, the VS Code data
+// folder, and the desktop entry last, so the menu never shows an entry whose launcher,
+// icon or home is missing. The links of the VS Code data folder (SPEC §7.1) are made, or
+// removed, after the files. Each file goes to
 // a temporary file in the same folder, is synced, gets its mode and is renamed over its
-// target. An existing private home is kept as it is.
+// target. An existing private home or data folder is kept as it is.
 //
 // If a write fails, Install removes its temporary file and stops. The error's metadata
 // "written" lists the paths already replaced, which stay in place.
@@ -54,7 +56,7 @@ func Install(ctx context.Context, p *Prepared, owner OwnerFunc, allowOverwrite m
 		if err := ctx.Err(); err != nil {
 			return nil, errors.NewErr(tagInstallCanceled, err).SetMetadata("path", f.Path, "written", paths(written))
 		}
-		if f.Kind == KindHome {
+		if f.Kind == KindHome || f.Kind == KindAppData {
 			if err := ensureDir(f.Path, f.Mode); err != nil {
 				return nil, withWritten(err, written)
 			}
@@ -63,6 +65,9 @@ func Install(ctx context.Context, p *Prepared, owner OwnerFunc, allowOverwrite m
 		}
 		f.Content = nil
 		written = append(written, f)
+	}
+	if err := syncLinks(ctx, p.AppData); err != nil {
+		return nil, withWritten(err, written)
 	}
 	return written, nil
 }
@@ -93,7 +98,7 @@ func ensureFolders(ctx context.Context, p *Prepared) error {
 		return err
 	}
 	for _, f := range p.Files {
-		if f.Kind == KindHome {
+		if f.Kind == KindHome || f.Kind == KindAppData {
 			continue
 		}
 		if err := ensureDir(filepath.Dir(f.Path), 0o755); err != nil {

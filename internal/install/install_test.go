@@ -316,7 +316,7 @@ func TestInstallRoutes(t *testing.T) {
 		p := k.prepare(nil)
 		// Err is nil for the calls of Check and EnsureDirs (one per file, one per folder),
 		// then reports the cancel when the first file is about to be written.
-		ctx := &cancelAfter{Context: context.Background(), calls: len(p.Files) + 6}
+		ctx := &cancelAfter{Context: context.Background(), calls: len(p.Files) + 7}
 		_, err := Install(ctx, p, nil, nil)
 		appErr := requireRouteMeta(t, err, tagInstallCanceled, "Install."+tagInstallCanceled)
 		if w, _ := appErr.Metadata["written"].([]string); len(w) != 0 {
@@ -329,7 +329,7 @@ func TestInstallRoutes(t *testing.T) {
 	t.Run("canceled after two files", func(t *testing.T) {
 		k := newKit(t)
 		p := k.prepare(nil)
-		ctx := &cancelAfter{Context: context.Background(), calls: len(p.Files) + 6 + 2}
+		ctx := &cancelAfter{Context: context.Background(), calls: len(p.Files) + 7 + 2}
 		_, err := Install(ctx, p, nil, nil)
 		appErr := requireRouteMeta(t, err, tagInstallCanceled, "Install."+tagInstallCanceled)
 		w, _ := appErr.Metadata["written"].([]string)

@@ -53,6 +53,12 @@ const (
 	FieldPrivateDev Field = "private_dev"
 	// FieldPrivateCache is [Settings.PrivateCache].
 	FieldPrivateCache Field = "private_cache"
+	// FieldVSCodeOwnData is [Settings.VSCodeOwnData].
+	FieldVSCodeOwnData Field = "vscode_own_data"
+	// FieldVSCodeShareSettings is [Settings.VSCodeShareSettings].
+	FieldVSCodeShareSettings Field = "vscode_share_settings"
+	// FieldVSCodeShellFiles is [Settings.VSCodeShellFiles].
+	FieldVSCodeShellFiles Field = "vscode_shell_files"
 
 	// FieldNetwork is [Settings.Network].
 	FieldNetwork Field = "network"
@@ -214,6 +220,9 @@ func fieldTable() []fieldRow {
 		scalar(FieldPrivateTmp, TabFiles, func(s *Settings) *bool { return &s.PrivateTmp }),
 		scalar(FieldPrivateDev, TabFiles, func(s *Settings) *bool { return &s.PrivateDev }),
 		scalar(FieldPrivateCache, TabFiles, func(s *Settings) *bool { return &s.PrivateCache }),
+		scalar(FieldVSCodeOwnData, TabFiles, func(s *Settings) *bool { return &s.VSCodeOwnData }),
+		scalar(FieldVSCodeShareSettings, TabFiles, func(s *Settings) *bool { return &s.VSCodeShareSettings }),
+		scalar(FieldVSCodeShellFiles, TabFiles, func(s *Settings) *bool { return &s.VSCodeShellFiles }),
 
 		scalar(FieldNetwork, TabNetwork, func(s *Settings) *NetMode { return &s.Network }),
 		list(FieldDNS, TabNetwork, func(s *Settings) *[]string { return &s.DNS }),

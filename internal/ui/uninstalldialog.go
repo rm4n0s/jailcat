@@ -16,6 +16,8 @@ type UninstallAnswer struct {
 	Chosen bool
 	// DeleteHome is the state of "Also delete its private home".
 	DeleteHome bool
+	// DeleteAppData is the state of "Also delete its VS Code data".
+	DeleteAppData bool
 	// KeepSettings is the state of "Keep its settings in Jailcat".
 	KeepSettings bool
 }
@@ -30,18 +32,20 @@ const (
 
 // Texts of the Uninstall dialogs (SPEC §13.2).
 const (
-	uninstallTitlePrefix  = "Uninstall "
-	uninstallIntroText    = "This removes the files Jailcat made for this build:"
-	uninstallHomeText     = "Also delete its private home"
-	uninstallKeepText     = "Keep its settings in Jailcat"
-	uninstallKeepHelp     = "The build stays in the list as not installed, so you can build it again."
-	uninstallConfirmText  = "Uninstall"
-	uninstallKeptTitle    = "Some files were changed"
-	uninstallKeptText     = "These files were changed since Jailcat wrote them, so Jailcat left them where they are:"
-	uninstallRemoveText   = "Remove them anyway"
-	uninstallLeaveText    = "Leave them"
-	uninstallDialogWidth  = 560.0
-	uninstallHomeKeptText = "Its private home was kept: "
+	uninstallTitlePrefix     = "Uninstall "
+	uninstallIntroText       = "This removes the files Jailcat made for this build:"
+	uninstallHomeText        = "Also delete its private home"
+	uninstallAppDataText     = "Also delete its VS Code data"
+	uninstallKeepText        = "Keep its settings in Jailcat"
+	uninstallKeepHelp        = "The build stays in the list as not installed, so you can build it again."
+	uninstallConfirmText     = "Uninstall"
+	uninstallKeptTitle       = "Some files were changed"
+	uninstallKeptText        = "These files were changed since Jailcat wrote them, so Jailcat left them where they are:"
+	uninstallRemoveText      = "Remove them anyway"
+	uninstallLeaveText       = "Leave them"
+	uninstallDialogWidth     = 560.0
+	uninstallHomeKeptText    = "Its private home was kept: "
+	uninstallAppDataKeptText = "Its VS Code data was kept: "
 )
 
 // UninstallDialog asks what to do when a build is uninstalled (SPEC §13.2): the files it
@@ -65,8 +69,9 @@ func (w *UninstallDialog) CreateState() m.State { return &uninstallDialogState{k
 
 type uninstallDialogState struct {
 	m.StateOf[*UninstallDialog]
-	deleteHome bool
-	keep       bool
+	deleteHome    bool
+	deleteAppData bool
+	keep          bool
 }
 
 func (s *uninstallDialogState) Build(bc m.BuildContext) m.Widget {
@@ -74,10 +79,14 @@ func (s *uninstallDialogState) Build(bc m.BuildContext) m.Widget {
 	theme := m.ThemeOf(bc)
 
 	var list []m.Widget
-	homePath := ""
+	homePath, appDataPath := "", ""
 	for i, f := range w.files {
 		if f.Kind == store.FileKindHome {
 			homePath = f.Path
+			continue
+		}
+		if f.Kind == store.FileKindAppData {
+			appDataPath = f.Path
 			continue
 		}
 		list = append(list, m.NewText(conflictKindName(install.Kind(f.Kind))+": "+displayPlainPath(f.Path, w.home),
@@ -99,6 +108,16 @@ func (s *uninstallDialogState) Build(bc m.BuildContext) m.Widget {
 			ContentPadding: m.NewEdgeInsetsSymmetric(0, 0), ControlAffinity: m.ListTileControlAffinityLeading,
 		}))
 	}
+	if appDataPath != "" {
+		content = append(content, m.NewCheckboxListTile(m.Some(s.deleteAppData), func(v m.Opt[bool]) {
+			on, _ := v.Get()
+			s.SetState(func() { s.deleteAppData = on })
+		}, m.CheckboxListTileOpts{
+			Key: m.NewValueKey("uninstall:appdata"), Title: m.NewText(uninstallAppDataText),
+			Subtitle: m.NewText(displayPlainPath(appDataPath, w.home)), Dense: m.Some(true),
+			ContentPadding: m.NewEdgeInsetsSymmetric(0, 0), ControlAffinity: m.ListTileControlAffinityLeading,
+		}))
+	}
 	content = append(content, m.NewCheckboxListTile(m.Some(s.keep), func(v m.Opt[bool]) {
 		on, _ := v.Get()
 		s.SetState(func() { s.keep = on })
@@ -114,7 +133,7 @@ func (s *uninstallDialogState) Build(bc m.BuildContext) m.Widget {
 		Actions: []m.Widget{
 			m.NewTextButton(func() { m.NavigatorPop(bc) }, m.NewText(cancelButtonText), m.TextButtonOpts{Key: m.NewValueKey("uninstall:cancel")}),
 			m.NewFilledButton(func() {
-				m.NavigatorPop(bc, UninstallAnswer{Chosen: true, DeleteHome: s.deleteHome, KeepSettings: s.keep})
+				m.NavigatorPop(bc, UninstallAnswer{Chosen: true, DeleteHome: s.deleteHome, DeleteAppData: s.deleteAppData, KeepSettings: s.keep})
 			}, m.NewText(uninstallConfirmText), m.FilledButtonOpts{Key: m.NewValueKey("uninstall:confirm")}),
 		},
 	})

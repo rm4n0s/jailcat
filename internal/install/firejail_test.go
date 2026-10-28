@@ -134,6 +134,13 @@ func (l *lab) baseProfile(name string, lines ...string) string {
 // probe sees the effect of its own lines only.
 func (l *lab) build(base string, edit func(s *firejail.Settings)) (launcher string, files []File) {
 	l.t.Helper()
+	app := apps.App{ID: "sh", Kind: apps.KindBinary, Name: "sh", Binary: "/bin/sh", BinaryName: "sh", Terminal: true}
+	return l.buildApp(app, base, edit)
+}
+
+// buildApp is build for another app.
+func (l *lab) buildApp(app apps.App, base string, edit func(s *firejail.Settings)) (launcher string, files []File) {
+	l.t.Helper()
 	ctx := context.Background()
 	l.builds++
 	name := "firejail-probe-" + string(rune('a'+l.builds-1))
@@ -151,6 +158,7 @@ func (l *lab) build(base string, edit func(s *firejail.Settings)) (launcher stri
 		}
 		baseValues = firejail.BaseValues(prof, l.profileHome)
 	}
+	baseValues = firejail.WithAppDefaults(baseValues, app.Binary)
 	baseValues.Settings.SandboxName = name
 
 	s := baseValues.Settings.Clone()
@@ -173,11 +181,11 @@ func (l *lab) build(base string, edit func(s *firejail.Settings)) (launcher stri
 		Base:        baseValues,
 		Overrides:   firejail.Diff(baseValues.Settings, s),
 		Home:        l.profileHome,
+		VSCode:      firejail.NewVSCodeSpec(app.Binary, l.dirs.AppData, l.dirs.ConfigHome, name),
 	})
 	if err != nil {
 		l.t.Fatalf("Generate: %v", err)
 	}
-	app := apps.App{ID: "sh", Kind: apps.KindBinary, Name: "sh", Binary: "/bin/sh", BinaryName: "sh", Terminal: true}
 	p, err := Prepare(ctx, l.dirs, Request{
 		BuildID: int64(l.builds), App: app, Settings: s, Profile: gen, Firejail: realFirejail, IconTheme: "hicolor",
 	})

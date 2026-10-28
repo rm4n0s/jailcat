@@ -56,6 +56,9 @@ type ProfileSpec struct {
 	ExtraRules []string
 	// Home is the user's home folder, to write the paths under it with ${HOME}.
 	Home string
+	// VSCode names the folders of the VS Code switches (SPEC §7.1); nil when the app is
+	// not VS Code, which writes none of their lines.
+	VSCode *VSCodeSpec
 }
 
 // GeneratedLine is one line of the generated profile and where it came from.
@@ -388,6 +391,9 @@ func (g *generator) rows() error {
 			return err
 		}
 	}
+	if err := g.vscode(); err != nil {
+		return err
+	}
 	return g.checkChosen()
 }
 
@@ -454,11 +460,13 @@ func (g *generator) checkChosen() error {
 }
 
 // genericField reports whether a field is written by the one rule for every field. The
-// home choice, the private folder and Downloads have their own (home and rows), and
-// "quiet" is written first.
+// home choice, the private folder and Downloads have their own (home and rows), the
+// VS Code switches are written with the rows ([generator.vscode]), and "quiet" is
+// written first.
 func genericField(f Field) bool {
 	switch f {
-	case FieldHome, FieldPrivateDir, FieldDownloadsReadWrite, FieldQuiet:
+	case FieldHome, FieldPrivateDir, FieldDownloadsReadWrite, FieldQuiet,
+		FieldVSCodeOwnData, FieldVSCodeShareSettings, FieldVSCodeShellFiles:
 		return false
 	}
 	return true

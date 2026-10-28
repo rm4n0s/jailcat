@@ -38,6 +38,9 @@ A build writes four files and, if you chose one, a private home:
 | The menu entry | `~/.local/share/applications/firejail-<app>.desktop` |
 | The icon | `~/.local/share/icons/hicolor/scalable/apps/firejail-<app>.svg` |
 | Own private home | `~/.local/share/jailcat/homes/firejail-<app>/` |
+| VS Code only: its own data folder | `~/.local/share/jailcat/appdata/firejail-<app>/` |
+
+A sandboxed VS Code gets a data folder of its own (`--user-data-dir`): VS Code runs one instance per data folder, and without its own the sandboxed `code` would hand its window to your already-open VS Code, outside the sandbox. Your settings, keybindings and snippets are shared with it through links, and for the integrated terminal your shell startup files are shown read-only (note that what they export, such as API keys, is visible in the sandbox). The three switches are on the Files tab.
 
 Your changes are written as firejail lines placed before the `include`, using firejail's own `ignore` mechanism to undo lines of the profile, so firejail's updates to that profile still reach your sandbox. The sandbox needs only firejail to run: it keeps working if Jailcat is closed or removed. Jailcat never overwrites a file it didn't make, and **Uninstall** removes only the files it wrote.
 

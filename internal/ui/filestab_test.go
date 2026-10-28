@@ -493,8 +493,12 @@ func TestFilesTabScrolls(t *testing.T) {
 	if p.ts.Exists(last) {
 		t.Fatal("the last switch is on screen: the tab is not taller than the window")
 	}
-	p.ts.Scroll(key("body:"+string(firejail.TabFiles)), gui.Offset{Dx: 0, Dy: 3000})
-	p.ts.Pump()
+	// The VS Code section makes the tab longer, and a list that builds its items as they
+	// come into view learns its length while it scrolls: scroll until the end.
+	for range 3 {
+		p.ts.Scroll(key("body:"+string(firejail.TabFiles)), gui.Offset{Dx: 0, Dy: 3000})
+		p.ts.Pump()
+	}
 	if !p.ts.Exists(last) {
 		t.Fatal("scrolling did not bring up the last switch")
 	}

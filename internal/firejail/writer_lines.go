@@ -349,6 +349,11 @@ func (m lineMaker) fieldLines(f Field, s *Settings) ([]string, error) {
 	case FieldQuiet:
 		return lineIf(s.Quiet, "quiet"), nil
 
+	case FieldVSCodeOwnData, FieldVSCodeShareSettings, FieldVSCodeShellFiles:
+		// Jailcat's own settings: the generator writes their lines with the folder rows
+		// ([generator.vscode]), because they depend on the home choice and on the folders
+		// of the build, not on a profile line they undo.
+		return nil, nil
 	case FieldSandboxName, FieldMenuName, FieldComment, FieldIcon, FieldIconSeed,
 		FieldInstallMenu, FieldInstallBin, FieldOpenFileTypes, FieldTerminal, FieldExtraArgs:
 		// The launcher script and the desktop entry hold these, not the profile.

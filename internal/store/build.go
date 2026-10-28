@@ -38,6 +38,8 @@ const (
 	FileKindIcon = "icon"
 	// FileKindHome is the build's private home folder; it has no SHA-256.
 	FileKindHome = "home"
+	// FileKindAppData is the build's VS Code data folder; it has no SHA-256.
+	FileKindAppData = "appdata"
 )
 
 // Build is one sandbox of one app (SPEC §12). It is a plain value: nothing in it refers
@@ -98,7 +100,7 @@ type InstalledFile struct {
 	Kind string
 	// Path is the absolute path; it belongs to one build only.
 	Path string
-	// SHA256 is the hex SHA-256 of the file as written, empty for [FileKindHome].
+	// SHA256 is the hex SHA-256 of the file as written, empty for [FileKindHome] and [FileKindAppData].
 	SHA256 string
 }
 

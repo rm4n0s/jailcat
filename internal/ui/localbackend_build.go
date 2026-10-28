@@ -68,6 +68,7 @@ func (b *LocalBackend) generate(ctx context.Context, req BuildRequest, fjPath st
 	gen, err := firejail.Generate(firejail.ProfileSpec{
 		BuildID: req.Build.ID, BaseProfile: req.BaseProfile, Profile: req.Profile, Base: req.Base,
 		Overrides: req.Overrides, ExtraRules: req.ExtraRules, Home: b.dirs.Home,
+		VSCode: firejail.NewVSCodeSpec(req.App.Binary, b.dirs.AppData, b.dirs.ConfigHome, req.Settings.SandboxName),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -237,9 +238,18 @@ func (b *LocalBackend) Try(ctx context.Context, req BuildRequest) (TrySession, e
 			home = f.Path
 		}
 	}
+	// The VS Code data folder is the build's own: a Try makes it and its links like Build
+	// does, and starts the app with it (SPEC §11.2).
+	if err := install.SyncAppData(ctx, prepared.AppData); err != nil {
+		return nil, err
+	}
+	args := req.Settings.ExtraArgs
+	if dir := prepared.UserDataDir; dir != "" {
+		args = append([]string{firejail.UserDataDirFlag, dir}, args...)
+	}
 	session, err := firejail.Runner{Firejail: fjPath}.Try(ctx, firejail.TryRequest{
 		Name: req.Settings.SandboxName, ProfileText: []byte(gen.String()), Binary: req.App.Binary,
-		Args: req.Settings.ExtraArgs, CacheDir: b.dirs.Cache, PrivateHome: home,
+		Args: args, CacheDir: b.dirs.Cache, PrivateHome: home,
 	})
 	if err != nil {
 		return nil, err
@@ -259,7 +269,7 @@ func (b *LocalBackend) Uninstall(ctx context.Context, build store.Build, choice 
 	for i, f := range recorded {
 		files[i] = install.File{Kind: install.Kind(f.Kind), Path: f.Path, SHA256: f.SHA256}
 	}
-	res, err := install.Uninstall(ctx, files, install.UninstallOpts{Dirs: b.dirs, DeleteHome: choice.DeleteHome, Force: choice.Force})
+	res, err := install.Uninstall(ctx, files, install.UninstallOpts{Dirs: b.dirs, DeleteHome: choice.DeleteHome, DeleteAppData: choice.DeleteAppData, Force: choice.Force})
 	if err != nil {
 		return res, err
 	}

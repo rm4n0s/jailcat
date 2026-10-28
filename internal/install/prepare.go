@@ -41,13 +41,22 @@ type Prepared struct {
 	// BuildID is the id of the build the files belong to.
 	BuildID int64
 	// Files are the files to write, in the order [Install] writes them: profile,
-	// launcher, icon, the desktop entry when the build has one, the private home when
-	// it has one.
+	// launcher, icon, the desktop entry when the build has one, the private home and the
+	// VS Code data folder when it has them.
 	Files []File
 	// IconFallback is "" when the icon is the one the settings ask for; otherwise it
 	// says in words why a random icon was made instead of the app's icon with the
 	// badge (SPEC §10.2). The Launcher tab shows it.
 	IconFallback string
+
+	// AppData is what the build does with its VS Code data folder; nil for a build that
+	// is not a VS Code app, or whose home is not Full or Only the folders I choose. The
+	// folder itself is one of Files when AppData.Create is set.
+	AppData *AppData
+
+	// UserDataDir is the data folder the launcher passes to a VS Code app with
+	// "--user-data-dir" (SPEC §7.1, §9.2); "" when it passes none. Try passes it too.
+	UserDataDir string
 
 	// dirs are the folders the files were computed for.
 	dirs xdg.Dirs
@@ -73,6 +82,13 @@ func Prepare(ctx context.Context, dirs xdg.Dirs, req Request) (*Prepared, error)
 
 	p := &Prepared{BuildID: req.BuildID, dirs: dirs}
 
+	// The VS Code data folder: checked first, because the launcher names it.
+	plan, appData, err := appDataFile(req, dirs.AppData, dirs.ConfigHome)
+	if err != nil {
+		return nil, err
+	}
+	p.AppData = plan
+
 	profile := File{
 		Kind:    KindProfile,
 		Path:    filepath.Join(dirs.Profiles, s.SandboxName+".profile"),
@@ -81,7 +97,13 @@ func Prepare(ctx context.Context, dirs xdg.Dirs, req Request) (*Prepared, error)
 	}
 	p.Files = append(p.Files, withSum(profile))
 
-	launcher, err := launcherFile(dirs, req, profile.Path)
+	// A VS Code app with its own data folder starts with it in every home mode (SPEC
+	// §7.1, §9.2).
+	if vs := firejail.NewVSCodeSpec(req.App.Binary, dirs.AppData, dirs.ConfigHome, s.SandboxName); vs != nil && s.VSCodeOwnData {
+		p.UserDataDir = vs.DataDir
+	}
+
+	launcher, err := launcherFile(dirs, req, profile.Path, p.UserDataDir)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +131,10 @@ func Prepare(ctx context.Context, dirs xdg.Dirs, req Request) (*Prepared, error)
 		}
 		p.Files = append(p.Files, home)
 	}
+
+	if appData != nil {
+		p.Files = append(p.Files, *appData)
+	}
 	return p, nil
 }
 
@@ -121,7 +147,7 @@ func withSum(f File) File {
 
 // launcherFile makes the launcher script (SPEC §9.2, §9.3): in the bin folder with
 // InstallBin, else in Jailcat's launchers folder.
-func launcherFile(dirs xdg.Dirs, req Request, profilePath string) (File, error) {
+func launcherFile(dirs xdg.Dirs, req Request, profilePath, userDataDir string) (File, error) {
 	s := req.Settings
 	dir := dirs.Launchers
 	if s.InstallBin {
@@ -129,11 +155,12 @@ func launcherFile(dirs xdg.Dirs, req Request, profilePath string) (File, error) 
 	}
 	var buf bytes.Buffer
 	err := firejail.WriteLauncher(&buf, firejail.LauncherSpec{
-		BuildID:   req.BuildID,
-		Firejail:  req.Firejail,
-		Profile:   profilePath,
-		Binary:    req.App.Binary,
-		ExtraArgs: s.ExtraArgs,
+		BuildID:     req.BuildID,
+		Firejail:    req.Firejail,
+		Profile:     profilePath,
+		Binary:      req.App.Binary,
+		UserDataDir: userDataDir,
+		ExtraArgs:   s.ExtraArgs,
 	})
 	if err != nil {
 		return File{}, err

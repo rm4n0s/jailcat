@@ -8,8 +8,8 @@ import (
 	"github.com/rm4n0s/errors"
 )
 
-// EnsureDirs creates Jailcat's own folders when they are missing: Data and Homes with
-// mode 0700; Profiles, Imported, Launchers and Cache with mode 0755 (SPEC §3.1). The
+// EnsureDirs creates Jailcat's own folders when they are missing: Data, Homes and AppData
+// with mode 0700; Profiles, Imported, Launchers and Cache with mode 0755 (SPEC §3.1). The
 // mode is applied to the folder it creates, whatever the umask; a folder that already
 // exists keeps its mode. It does not create Bin, Applications or Icons: the installer
 // creates them when it writes (step 3.3).
@@ -21,6 +21,7 @@ func EnsureDirs(ctx context.Context, d Dirs) error {
 	}{
 		{"Data", d.Data, 0o700},
 		{"Homes", d.Homes, 0o700},
+		{"AppData", d.AppData, 0o700},
 		{"Profiles", d.Profiles, 0o755},
 		{"Imported", d.Imported, 0o755},
 		{"Launchers", d.Launchers, 0o755},

@@ -37,6 +37,21 @@ var launcherCases = []struct {
 		Profile:  "/home/my user/.local/share/jailcat/profiles/firejail-my-app.profile",
 		Binary:   "/opt/My \"App\"/bin/it's here",
 	}},
+	{"code-vscode.sh", LauncherSpec{
+		BuildID:     7,
+		Firejail:    "/usr/bin/firejail",
+		Profile:     "/home/u/.local/share/jailcat/profiles/firejail-code.profile",
+		Binary:      "/usr/bin/code",
+		UserDataDir: "/home/u/.local/share/jailcat/appdata/firejail-code",
+	}},
+	{"code-vscode-extra.sh", LauncherSpec{
+		BuildID:     7,
+		Firejail:    "/usr/bin/firejail",
+		Profile:     "/home/u/.local/share/jailcat/profiles/firejail-code.profile",
+		Binary:      "/usr/bin/code",
+		UserDataDir: "/home/my user/it's/appdata/firejail-code",
+		ExtraArgs:   []string{"--ozone-platform=wayland"},
+	}},
 	{"special-args.sh", LauncherSpec{
 		BuildID:  3,
 		Firejail: "/usr/bin/firejail",
@@ -205,6 +220,9 @@ func TestWriteLauncherErrors(t *testing.T) {
 		{"profile trailing slash", with(func(s *LauncherSpec) { s.Profile = "/p/x.profile/" }), "WriteLauncher.LauncherProfileInvalid"},
 		{"binary relative", with(func(s *LauncherSpec) { s.Binary = "code" }), "WriteLauncher.LauncherBinaryInvalid"},
 		{"binary double slash", with(func(s *LauncherSpec) { s.Binary = "/usr//bin/x" }), "WriteLauncher.LauncherBinaryInvalid"},
+		{"data folder relative", with(func(s *LauncherSpec) { s.UserDataDir = "appdata/x" }), "WriteLauncher.LauncherDataDirInvalid"},
+		{"data folder unclean", with(func(s *LauncherSpec) { s.UserDataDir = "/d/appdata/../x" }), "WriteLauncher.LauncherDataDirInvalid"},
+		{"NUL in data folder", with(func(s *LauncherSpec) { s.UserDataDir = "/d/a\x00b" }), "WriteLauncher->ShellQuote.ShellWordHasNul"},
 		{"NUL in binary", with(func(s *LauncherSpec) { s.Binary = "/usr/bin/x\x00y" }), "WriteLauncher->ShellQuote.ShellWordHasNul"},
 		{"NUL in extra argument", with(func(s *LauncherSpec) { s.ExtraArgs = []string{"a\x00b"} }), "WriteLauncher->ShellQuote.ShellWordHasNul"},
 	}

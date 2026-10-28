@@ -31,6 +31,8 @@ type Dirs struct {
 	Imported string
 	// Homes holds the private homes, <Data>/homes.
 	Homes string
+	// AppData holds the VS Code data folders of the builds, <Data>/appdata (SPEC §7.1).
+	AppData string
 	// Launchers holds the launcher scripts when they are not installed in Bin, <Data>/launchers.
 	Launchers string
 	// Cache is Jailcat's cache folder, $XDG_CACHE_HOME/jailcat (default $HOME/.cache/jailcat).
@@ -89,6 +91,7 @@ func Resolve(env Env) (Dirs, error) {
 		Profiles:       profiles,
 		Imported:       filepath.Join(profiles, "imported"),
 		Homes:          filepath.Join(data, "homes"),
+		AppData:        filepath.Join(data, "appdata"),
 		Launchers:      filepath.Join(data, "launchers"),
 		Cache:          filepath.Join(cacheHome, "jailcat"),
 		Bin:            bin,

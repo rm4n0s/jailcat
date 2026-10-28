@@ -224,3 +224,45 @@ func TestUninstallFailure(t *testing.T) {
 		t.Error("a failed uninstall changed the build")
 	}
 }
+
+func TestUninstallDialogVSCodeData(t *testing.T) {
+	tests := []struct {
+		name string
+		tick []string
+		want UninstallChoice
+	}{
+		{name: "kept by default", want: UninstallChoice{KeepSettings: true}},
+		{name: "deleted with its tick", tick: []string{"uninstall:appdata"}, want: UninstallChoice{KeepSettings: true, DeleteAppData: true}},
+		{name: "the home tick is another one", tick: []string{"uninstall:home"}, want: UninstallChoice{KeepSettings: true, DeleteHome: true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p, _ := uninstallPage(t, true)
+			home := p.backend.fj.dirs.Home
+			p.backend.set(func(f *fakeBackend) {
+				f.installedFiles = append(f.installedFiles,
+					store.InstalledFile{Kind: store.FileKindAppData, Path: filepath.Join(home, ".local/share/jailcat/appdata/firejail-code")})
+			})
+			p.waitUninstallDialog()
+			if !p.ts.Exists(key("uninstall:appdata")) || p.checked("uninstall:appdata") {
+				t.Fatal("the VS Code data option is missing or on")
+			}
+			if !p.ts.Exists(gluttertest.ByText(uninstallAppDataText)) || !p.ts.Exists(gluttertest.ByTextContaining(".local/share/jailcat/appdata/firejail-code")) {
+				t.Error("the option or the path of the folder is not shown")
+			}
+			// The folder is not in the list of files that are removed.
+			if p.ts.Exists(gluttertest.ByTextContaining("VS Code data: ")) {
+				t.Error("the data folder is listed among the files")
+			}
+			for _, k := range tt.tick {
+				p.tap(k)
+			}
+			p.tap("uninstall:confirm")
+			p.waitFor("the banner", func() bool { return p.editorState().outcome != nil })
+			asks := p.backend.uninstallAsks
+			if len(asks) != 1 || asks[0].DeleteAppData != tt.want.DeleteAppData || asks[0].DeleteHome != tt.want.DeleteHome {
+				t.Fatalf("Uninstall was called with %+v, want %+v", asks, tt.want)
+			}
+		})
+	}
+}

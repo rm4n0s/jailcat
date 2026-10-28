@@ -129,7 +129,7 @@ func (s *editorPageState) askUninstall(build store.Build, files []store.Installe
 				return
 			}
 			s.SetState(func() {
-				s.runUninstall(build, UninstallChoice{DeleteHome: answer.DeleteHome, KeepSettings: answer.KeepSettings}, install.UninstallResult{})
+				s.runUninstall(build, UninstallChoice{DeleteHome: answer.DeleteHome, DeleteAppData: answer.DeleteAppData, KeepSettings: answer.KeepSettings}, install.UninstallResult{})
 			})
 		case <-ctx.Done():
 		}
@@ -146,6 +146,7 @@ func (s *editorPageState) runUninstall(build store.Build, choice UninstallChoice
 		res, err := w.backend.Uninstall(context.WithoutCancel(ctx), build, choice)
 		res.Removed = append(append([]install.File(nil), earlier.Removed...), res.Removed...)
 		res.HomeKept = !choice.DeleteHome && (earlier.HomeKept || res.HomeKept)
+		res.AppDataKept = !choice.DeleteAppData && (earlier.AppDataKept || res.AppDataKept)
 		done := err == nil && UninstallDone(res, choice)
 		if done && onChanged != nil {
 			binding.Post(onChanged)

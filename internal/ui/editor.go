@@ -128,6 +128,9 @@ type Editor struct {
 
 // NewEditor creates the editor of a new build, or of the stored build in o.Build.
 func NewEditor(app apps.App, o EditorOpts) *Editor {
+	// The VS Code switches are Jailcat's own settings, not lines of a profile: their base
+	// value is the value of a new build of the app (SPEC §7.1).
+	o.Base = firejail.WithAppDefaults(o.Base, app.Binary)
 	e := &Editor{
 		app: app, home: o.Home, homesDir: o.HomesDir, choices: o.Choices,
 		baseProfile: o.BaseProfile, profile: o.Profile, base: o.Base,
@@ -362,6 +365,7 @@ func (e *Editor) Problems() []firejail.Problem {
 // removed ("Start over"). The sandbox name and the icon seed stay either way.
 func (e *Editor) SwitchProfile(path string, base firejail.Base, profile *firejail.Profile, keep bool) {
 	old := e.overrides
+	base = firejail.WithAppDefaults(base, e.app.Binary)
 	e.baseProfile, e.base, e.profile = path, base, profile
 	e.baseMissing = false
 	e.extraDone = false // the rows are checked against the base

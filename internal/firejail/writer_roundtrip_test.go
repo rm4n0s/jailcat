@@ -15,11 +15,14 @@ import (
 )
 
 // notInProfile are the fields no profile line holds: the launcher script and the desktop
-// entry do. Quiet is read from Profile.Quiet, not from the base values.
+// entry do. Quiet is read from Profile.Quiet, not from the base values. The VS Code
+// switches are Jailcat's own: the generator writes their lines with the folder rows, and
+// no base profile gives them a value.
 func notInProfile(f Field) bool {
 	switch f {
 	case FieldSandboxName, FieldMenuName, FieldComment, FieldIcon, FieldIconSeed,
-		FieldInstallMenu, FieldInstallBin, FieldOpenFileTypes, FieldTerminal, FieldExtraArgs, FieldQuiet:
+		FieldInstallMenu, FieldInstallBin, FieldOpenFileTypes, FieldTerminal, FieldExtraArgs, FieldQuiet,
+		FieldVSCodeOwnData, FieldVSCodeShareSettings, FieldVSCodeShellFiles:
 		return true
 	}
 	return false

@@ -155,6 +155,15 @@ type Settings struct {
 	PrivateDev bool
 	// PrivateCache gives the app its own cache folder (private-cache).
 	PrivateCache bool
+	// VSCodeOwnData gives a VS Code app its own data folder (--user-data-dir), so the
+	// sandboxed VS Code is an instance of its own (SPEC §7.1).
+	VSCodeOwnData bool
+	// VSCodeShareSettings links the own data folder's settings, keybindings and
+	// snippets to the user's VS Code (SPEC §7.1).
+	VSCodeShareSettings bool
+	// VSCodeShellFiles shows the shell startup files read-only, for the integrated
+	// terminal (SPEC §7.1).
+	VSCodeShellFiles bool
 
 	// Network tab (SPEC §7.2).
 
