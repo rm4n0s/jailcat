@@ -13,38 +13,35 @@ import (
 
 // Texts of the Files tab the user reads (SPEC §7.1).
 const (
-	homeTitleText        = "Home folder"
-	homeIntroText        = "What the app sees as its home folder. This is the most important choice of a build."
-	homeFullTitle        = "Full home"
-	homeFullText         = "The app sees your whole home, minus what the profile hides"
-	homeChosenTitle      = "Only the folders I choose"
-	homeChosenText       = "Only the folders below; the rest of your home looks empty"
-	homeEmptyTitle       = "Empty home"
-	homeEmptyText        = "A new empty home every time; nothing is kept"
-	homePrivateTitle     = "Own private home"
-	foldersTitleText     = "Folders"
-	addFolderText        = "Add folder…"
-	typePathText         = "Type a path…"
-	noFoldersText        = "No folders in the list."
-	fromProfileText      = "from profile"
-	removedText          = "removed"
-	restoreText          = "Restore"
-	togglesTitleText     = "Quick settings"
-	readWriteText        = "Read-write"
-	readOnlyText         = "Read-only"
-	hiddenText           = "Hidden"
-	chooserTitleText     = "Choose folders for the app"
-	chooserAcceptText    = "Add"
-	chooserFailedText    = "The file chooser of your desktop could not be opened. Use Type a path… instead."
-	downloadsOffReason   = "Not available with an empty or own private home: the Downloads folder is in your real home, which they keep out of the sandbox."
-	lockedReasonText     = "Locked: the profile lets the app see this folder read-only (whitelist-ro), so it cannot be loosened or removed."
-	foldersHintFull      = "What the app may do with each folder. Folders that are not listed keep the profile's rules."
-	foldersHintChosen    = "The app sees only these folders (and the ones the profile lists); the rest of your home looks empty."
-	foldersHintKeepsOut  = "Only folders outside your home can be added: an empty or own private home keeps the real home out of the sandbox."
-	pathDialogTitleText  = "Type a folder path"
-	pathDialogHintText   = "/mnt/data, ~/Projects or ${DOWNLOADS}/books"
-	pathDialogAddText    = "Add"
-	pathDialogFieldLabel = "Folder"
+	homeTitleText       = "Home folder"
+	homeIntroText       = "What the app sees as its home folder. This is the most important choice of a build."
+	homeFullTitle       = "Full home"
+	homeFullText        = "The app sees your whole home, minus what the profile hides"
+	homeChosenTitle     = "Only the folders I choose"
+	homeChosenText      = "Only the folders below; the rest of your home looks empty"
+	homeEmptyTitle      = "Empty home"
+	homeEmptyText       = "A new empty home every time; nothing is kept"
+	homePrivateTitle    = "Own private home"
+	foldersTitleText    = "Folders"
+	addFolderText       = "Add folder…"
+	addFileText         = "Add file…"
+	noFoldersText       = "No folders in the list."
+	fromProfileText     = "from profile"
+	removedText         = "removed"
+	restoreText         = "Restore"
+	togglesTitleText    = "Quick settings"
+	readWriteText       = "Read-write"
+	readOnlyText        = "Read-only"
+	hiddenText          = "Hidden"
+	chooserTitleText    = "Choose folders for the app"
+	chooserFilesTitle   = "Choose files for the app"
+	chooserAcceptText   = "Add"
+	chooserFailedText   = "The file chooser of your desktop could not be opened."
+	downloadsOffReason  = "Not available with an empty or own private home: the Downloads folder is in your real home, which they keep out of the sandbox."
+	lockedReasonText    = "Locked: the profile lets the app see this folder read-only (whitelist-ro), so it cannot be loosened or removed."
+	foldersHintFull     = "What the app may do with each folder. Folders that are not listed keep the profile's rules."
+	foldersHintChosen   = "The app sees only these folders (and the ones the profile lists); the rest of your home looks empty."
+	foldersHintKeepsOut = "Only folders outside your home can be added: an empty or own private home keeps the real home out of the sandbox."
 )
 
 // homeTexts returns the title and the one-line explanation of a home choice.
@@ -112,7 +109,7 @@ type FilesTabOpts struct {
 }
 
 // FilesTab is the Files tab of the build editor (SPEC §7.1): the home folder choice at
-// the top, the folder list with **Add folder…** and **Type a path…**, and the quick
+// the top, the folder list with **Add folder…** and **Add file…**, and the quick
 // toggles. It edits an [Editor]; its content scrolls when it is taller than the window.
 type FilesTab struct {
 	m.StatefulWidget
@@ -160,7 +157,14 @@ func (s *filesTabState) apply(fn func(e *Editor)) {
 }
 
 // chooseFolders asks for folders with the chooser of the desktop and adds them.
-func (s *filesTabState) chooseFolders() {
+func (s *filesTabState) chooseFolders() { s.choose(true) }
+
+// chooseFiles asks for files with the chooser of the desktop and adds them. The
+// chooser of a desktop picks folders or files, never both, so each has its own button.
+func (s *filesTabState) chooseFiles() { s.choose(false) }
+
+// choose opens the chooser for folders (directory) or files and adds the answer.
+func (s *filesTabState) choose(directory bool) {
 	if s.choosing {
 		return
 	}
@@ -168,8 +172,12 @@ func (s *filesTabState) chooseFolders() {
 	bc := s.Context()
 	w.change(func() { s.choosing, s.message = true, "" })
 	s.Go(func(ctx context.Context) {
+		title := chooserTitleText
+		if !directory {
+			title = chooserFilesTitle
+		}
 		res, err := desktop.OpenFiles(ctx, bc, desktop.OpenFilesOpts{
-			Title: chooserTitleText, AcceptLabel: chooserAcceptText, Directory: true, Multiple: true,
+			Title: title, AcceptLabel: chooserAcceptText, Directory: directory, Multiple: true,
 		})
 		if ctx.Err() != nil {
 			return
@@ -202,26 +210,6 @@ func (s *filesTabState) addAll(paths []string) {
 		e.AddFolder(canonical)
 	}
 	s.message = strings.Join(refused, " ")
-}
-
-// typePath asks for a path in a dialog and adds it.
-func (s *filesTabState) typePath() {
-	w := s.Widget()
-	e := w.editor
-	result := m.ShowDialog[string](s.Context(), func(m.BuildContext) m.Widget { return NewPathDialog(e.CheckFolder) })
-	s.Go(func(ctx context.Context) {
-		select {
-		case path := <-result:
-			if path == "" {
-				return
-			}
-			w.change(func() {
-				s.message = ""
-				e.AddFolder(path)
-			})
-		case <-ctx.Done():
-		}
-	})
 }
 
 func (s *filesTabState) Build(bc m.BuildContext) m.Widget {
@@ -304,19 +292,19 @@ func foldersHint(final firejail.Settings) string {
 	return foldersHintFull
 }
 
-// foldersSection is the folder list: the header with the two ways to add a folder, one
+// foldersSection is the folder list: the header with the ways to add a folder or file, one
 // row per folder, the rows of the profile the user removed, and what is wrong.
 func (s *filesTabState) foldersSection(bc m.BuildContext, e *Editor, final firejail.Settings) m.Widget {
 	add := m.NewTextButtonIcon(s.chooseFolders, m.NewText(addFolderText), m.TextButtonIconOpts{
 		Icon:                  m.NewIcon(m.Icons.CreateNewFolder()),
 		ButtonStyleButtonOpts: m.ButtonStyleButtonOpts{Key: m.NewValueKey("add-folder")},
 	})
-	typed := m.NewTextButtonIcon(s.typePath, m.NewText(typePathText), m.TextButtonIconOpts{
-		Icon:                  m.NewIcon(m.Icons.Edit()),
-		ButtonStyleButtonOpts: m.ButtonStyleButtonOpts{Key: m.NewValueKey("type-path")},
+	addFile := m.NewTextButtonIcon(s.chooseFiles, m.NewText(addFileText), m.TextButtonIconOpts{
+		Icon:                  m.NewIcon(m.Icons.NoteAdd()),
+		ButtonStyleButtonOpts: m.ButtonStyleButtonOpts{Key: m.NewValueKey("add-file")},
 	})
 	col := []m.Widget{
-		sectionTitle(bc, foldersTitleText, nil, add, typed),
+		sectionTitle(bc, foldersTitleText, nil, add, addFile),
 		mutedText(bc, foldersHint(final)),
 		m.NewSizedBox(nil, m.SizedBoxOpts{Height: m.Some(4.0)}),
 	}

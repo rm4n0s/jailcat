@@ -224,17 +224,6 @@ func TestFilesTabRefusesTheRealHomeInPrivateModes(t *testing.T) {
 				t.Error("the refusal is not shown in plain words")
 			}
 
-			// Typed: refused in the dialog, which stays open.
-			p.tap("type-path")
-			p.ts.EnterText(key("path-field"), "~/Documents")
-			p.tap("path-add")
-			if !p.ts.Exists(gluttertest.ByType[*PathDialog]()) || !p.ts.Exists(gluttertest.ByTextContaining("~/Documents is inside your home folder")) {
-				t.Error("the dialog did not refuse the folder")
-			}
-			p.cancelPathDialog()
-			if p.ts.Exists(gluttertest.ByType[*PathDialog]()) {
-				t.Error("Cancel did not close the dialog")
-			}
 			// Nothing else was added, and the profile's rows stay.
 			if n := len(e.Final().Folders); n != profileRows+1 {
 				t.Errorf("%d rows, want %d", n, profileRows+1)
@@ -247,64 +236,6 @@ func TestFilesTabRefusesTheRealHomeInPrivateModes(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestFilesTabTypedPath(t *testing.T) {
-	p := filesPage(t, "Calculator")
-	e := p.home().editor
-	submit := func(text string) {
-		p.t.Helper()
-		p.ts.EnterText(key("path-field"), text)
-		p.ts.Pump()
-		p.tap("path-add")
-	}
-
-	// A valid path closes the dialog and adds the row, the home as ${HOME}.
-	p.tap("type-path")
-	submit("~/Projects/")
-	p.waitFor("the folder", func() bool { return hasFolder(e, "${HOME}/Projects") })
-	if p.ts.Exists(gluttertest.ByType[*PathDialog]()) || !p.ts.Exists(gluttertest.ByText("~/Projects")) {
-		t.Error("the dialog stayed open or the row is not shown")
-	}
-
-	// A macro: shown as the folder's name, with the macro as the hint.
-	p.tap("type-path")
-	submit("${DOWNLOADS}/books")
-	p.waitFor("the macro folder", func() bool { return hasFolder(e, "${DOWNLOADS}/books") })
-	if !p.ts.Exists(gluttertest.ByText("Downloads/books")) || !p.ts.Exists(gluttertest.ByText("${DOWNLOADS}/books")) {
-		t.Error("the macro row does not show the name and the hint")
-	}
-
-	// Invalid paths: the message of Validate, the dialog open, and typing clears it.
-	tests := []struct{ text, message string }{
-		{"projects", "must be a full path"},
-		{"/mnt/../etc", `".."`},
-		{"~/Projects", "in the list already"},
-	}
-	rows := len(e.Final().Folders)
-	for _, tt := range tests {
-		p.tap("type-path")
-		submit(tt.text)
-		if !p.ts.Exists(gluttertest.ByType[*PathDialog]()) || !p.ts.Exists(gluttertest.ByTextContaining(tt.message)) {
-			t.Errorf("%q: no message with %q", tt.text, tt.message)
-		}
-		p.ts.EnterText(key("path-field"), "x")
-		p.ts.Pump()
-		if p.ts.Exists(gluttertest.ByTextContaining(tt.message)) {
-			t.Errorf("%q: the message stays after typing", tt.text)
-		}
-		p.cancelPathDialog()
-	}
-	if len(e.Final().Folders) != rows {
-		t.Errorf("an invalid path was added: %+v", e.Final().Folders)
-	}
-}
-
-// cancelPathDialog presses Cancel in the dialog of the typed path.
-func (p *page) cancelPathDialog() {
-	p.t.Helper()
-	p.ts.Tap(gluttertest.Descendant(gluttertest.ByType[*PathDialog](), gluttertest.ByText(cancelButtonText)))
-	p.ts.Pump()
 }
 
 // pickAccess opens the access menu of the row and picks a level.
